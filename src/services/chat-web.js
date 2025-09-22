@@ -438,12 +438,16 @@ const createAIEntityChat = ({ onTranscript, onAIQuestion, onAINarration, onWorld
 
     // 3) Ouvir usuário (apenas se houver pergunta)
     if ((entry.question || '').trim()) {
-    try {
-      onDebug && onDebug.onHearStart && onDebug.onHearStart();
-      const blob = await recordUserOnce({ maxMs: 10000, silenceMs: 1500 });
-      const txt = await transcribeWithOpenAI(blob, { language: 'pt' });
-      window.__lastUserText = txt || '';
-        console.log('[chat] loop → resposta do usuário capturada:', (window.__lastUserText || '').slice(0, 80) + '...');
+        try {
+          onDebug && onDebug.onHearStart && onDebug.onHearStart();
+          const blob = await recordUserOnce({ maxMs: 10000, silenceMs: 1500 });
+          let txt = await transcribeWithOpenAI(blob, { language: 'pt' });
+          // Se a transcrição vier apenas entre parênteses, tratar como silêncio
+          if ((txt || '').trim().match(/^\s*\([\s\S]*\)\s*$/)) {
+            txt = '';
+          }
+          window.__lastUserText = txt || '';
+          console.log('[chat] loop → resposta do usuário capturada:', (window.__lastUserText || '').slice(0, 80) + '...');
       onTranscript && onTranscript(window.__lastUserText);
       onDebug && onDebug.onTranscribed && onDebug.onTranscribed(window.__lastUserText);
     } catch (e) {
