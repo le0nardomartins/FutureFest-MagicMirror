@@ -207,7 +207,9 @@ const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
     '- Stages 2..15: First write a 2-3 sentence NARRATION covering climate, society, culture, economy, technology and biodiversity (environmental-centric, showing consequences across aspects). The narration MUST explicitly evaluate the PREVIOUS USER ANSWER as if it were adopted by the majority of humanity: state if it worked or not and briefly explain why. Then ask EXACTLY ONE objective, GLOBAL, environmental QUESTION (no extra context).',
     '- Stage 1: DO NOT narrate; ask ONLY ONE objective, GLOBAL, environmental question based on the initial context provided.',
     '- Pre-stage (context setup): write ONLY the initial world narration in 2-4 sentences (plain text).',
-    '- Never use lists, bullets, or code blocks; only sentences.'
+    '- Never use lists, bullets, or code blocks; only sentences.',
+    '- In the question, always start with "O que você acha..." ou "na sua opinião..."',
+    '- Always end the question with the prefix "O que você vai fazer, Viajante?"'
   ].join('\n');
 
   // Diretriz de estágio com pequenas variações

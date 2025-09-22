@@ -1,16 +1,1 @@
-{
-  "projectId": "prj_0lgLNSQNGXthnAnJvCXxqq5iSyTf",
-  "orgId": "team_LMkpR7UZJyczZs9lvRrePDMR",
-  "projectName": "ic-game",
-  "settings": {
-    "createdAt": 1748458216628,
-    "framework": null,
-    "devCommand": null,
-    "installCommand": null,
-    "buildCommand": null,
-    "outputDirectory": null,
-    "rootDirectory": null,
-    "directoryListing": false,
-    "nodeVersion": "22.x"
-  }
-}
+{"projectId":"prj_tMWeYgndmWE1Fj6sg6OX8jvNmlSy","orgId":"team_LMkpR7UZJyczZs9lvRrePDMR","projectName":"ic-viagem-no-tempo"}
