@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Uma Jornada no Nosso Tempo</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
     <!-- Elementos do cursor personalizado -->
@@ -12,16 +12,16 @@
     
     <!-- Elemento de áudio para a música tema -->
     <audio id="background-music" loop preload="auto">
-        <source src="assets/audio/main-theme.wav" type="audio/wav">
+        <source src="./assets/audio/main-theme.wav" type="audio/wav">
         Seu navegador não suporta o elemento de áudio.
     </audio>
 
     <!-- Elementos de áudio para os sons dos botões -->
     <audio id="hover-sound" preload="auto">
-        <source src="assets/audio/hover.wav" type="audio/wav">
+        <source src="./assets/audio/hover.wav" type="audio/wav">
     </audio>
     <audio id="click-sound" preload="auto">
-        <source src="assets/audio/clicked.wav" type="audio/wav">
+        <source src="./assets/audio/clicked.wav" type="audio/wav">
     </audio>
 
     <div id="game-container">
@@ -44,8 +44,8 @@
         </div>
     </div>
 
-    <script src="cursor-effects.js"></script>
-    <script src="game.js"></script>
+    <script src="./cursor-effects.js"></script>
+    <script src="./game.js"></script>
     <script>
         // Reproduzir música de fundo ao carregar a página
         document.addEventListener('DOMContentLoaded', function() {

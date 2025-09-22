@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Entidade AI</title>
+    
+    <!-- Variáveis de ambiente para Vercel -->
+    <meta name="OPENAI_API_KEY" content="">
+    <meta name="ELEVENLABS_API_KEY" content="">
+    <meta name="ELEVENLABS_VOICE_ID" content="">
+    <meta name="EMAILJS_SERVICE_ID" content="">
+    <meta name="EMAILJS_TEMPLATE_ID" content="">
+    <meta name="EMAILJS_PUBLIC_KEY" content="">
+    
+    <script>
+        // Preenche as meta tags com as variáveis de ambiente da Vercel
+        (async function() {
+            const envVars = [
+                'OPENAI_API_KEY',
+                'ELEVENLABS_API_KEY', 
+                'ELEVENLABS_VOICE_ID',
+                'EMAILJS_SERVICE_ID',
+                'EMAILJS_TEMPLATE_ID',
+                'EMAILJS_PUBLIC_KEY'
+            ];
+            
+            try {
+                // Busca as variáveis da API da Vercel
+                const response = await fetch('/api/env');
+                if (response.ok) {
+                    const envData = await response.json();
+                    console.log('[env] Variáveis carregadas da Vercel:', envData);
+                    
+                    envVars.forEach(key => {
+                        const meta = document.querySelector(`meta[name="${key}"]`);
+                        if (meta && envData[key]) {
+                            meta.setAttribute('content', envData[key]);
+                            console.log(`[env] ${key} carregada:`, envData[key].slice(0, 20) + '...');
+                        } else {
+                            console.warn(`[env] ${key} não encontrada na Vercel`);
+                        }
+                    });
+                } else {
+                    console.error('[env] Erro ao carregar variáveis da Vercel:', response.status);
+                }
+            } catch (error) {
+                console.error('[env] Erro ao carregar variáveis da Vercel:', error);
+            }
+        })();
+    </script>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="./styles/pages-styles.css">
+    <style>
+        #sound-wave-container { position:absolute; inset:0; background:#000; z-index: 1; }
+        .overlay { position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:center; padding: 24px; z-index: 2; }
+        .bubble { max-width: min(900px, 90vw); width: 100%; background: rgba(0,0,0,0.55); border:1px solid rgba(0,255,220,0.25); border-radius:16px; padding:18px; color:#fff; font-family:'Outfit', sans-serif; box-shadow:0 0 25px rgba(0,255,220,0.18); }
+        .row { display:flex; gap:10px; align-items:center; }
+        .label { font-size:12px; opacity:0.85; margin-bottom:6px; }
+        .q { color:#A0FFF0; }
+        .n { color:#FFDCA8; }
+        .controls { position:absolute; top:12px; right:12px; z-index:3; display:flex; gap:8px; }
+        .btn { padding: 8px 12px; border-radius:10px; border:1px solid rgba(0,255,220,0.5); background: rgba(0,0,0,0.35); color:#fff; cursor:pointer; }
+        .btn:hover { background: rgba(0,255,220,0.12); }
+        .loading { position:absolute; inset:0; background:rgba(0,0,0,0.8); display:none; align-items:center; justify-content:center; flex-direction:column; gap:16px; color:#fff; z-index:5; }
+        .loading.show { display:flex; }
+        video, img { max-width: 60vw; max-height: 50vh; border: 1px solid rgba(0,255,220,0.2); border-radius: 10px; }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="sound-wave-container"></div>
+        <div class="controls">
+            <button id="btn-exit" class="btn">Encerrar</button>
+        </div>
+        <div class="overlay">
+            <div class="bubble">
+                <div class="label">Entidade AI</div>
+                <div id="ai-question" class="q">Preparando pergunta...</div>
+                <div id="ai-narration" class="n" style="margin-top:6px">Aguardando...</div>
+                <div id="transcript" style="opacity:.9; margin-top:8px; font-size:14px"></div>
+            </div>
+        </div>
+        <div id="loading" class="loading">
+            <div>Gerando imagem e vídeo do seu mundo...</div>
+            <div id="progress">Preparando...</div>
+            <div id="results" style="display:none; text-align:center">
+                <div style="margin:8px 0">Imagem final</div>
+                <img id="result-image" />
+                <div style="margin:12px 0">Vídeo (prévia)</div>
+                <video id="result-video" controls></video>
+            </div>
+            <button id="btn-finish" class="btn" style="display:none">Concluir</button>
+        </div>
+    </div>
+
+    <script src="../sound-wave-animation.js"></script>
+    <script>
+        // Teste imediato de disponibilidade das variáveis
+        console.log('[ai-entity] Teste imediato:');
+    </script>
+    <script src="../services/chat-web.js"></script>
+    <script src="../services/dalle.js"></script>
+    <script>
+        console.log('[ai-entity] Iniciando script...');
+        // Gate de readiness: aguarda variáveis essenciais antes de iniciar
+        window.__getEnvVar = window.__getEnvVar || function(key){
+            const meta = document.querySelector(`meta[name="${key}"]`);
+            return meta && meta.getAttribute('content') || '';
+        };
+        const waitEnvReady = async (keys, to=5000) => {
+            const start = Date.now();
+            while (Date.now() - start < to) {
+                if (keys.every(k => (window.__getEnvVar(k) || '').trim())) return true;
+                await new Promise(r => setTimeout(r, 100));
+            }
+            return false;
+        };
+        const required = ['OPENAI_API_KEY','ELEVENLABS_API_KEY','ELEVENLABS_VOICE_ID'];
+        (async () => {
+            const ready = await waitEnvReady(required, 5000);
+            if (!ready) {
+                console.error('[ai-entity] ❌ Variáveis obrigatórias não carregaram a tempo:', required);
+                return;
+            }
+        
+        const params = new URLSearchParams(window.location.search);
+        const email = params.get('email') || '';
+        console.log('[ai-entity] Email:', email);
+
+        console.log('[ai-entity] Criando SoundWaveAnimation...');
+        const soundWave = new SoundWaveAnimation('sound-wave-container');
+        console.log('[ai-entity] SoundWaveAnimation criada:', soundWave);
+        const $q = document.getElementById('ai-question');
+        const $n = document.getElementById('ai-narration');
+        const $t = document.getElementById('transcript');
+        const $loading = document.getElementById('loading');
+        const $progress = document.getElementById('progress');
+        const $results = document.getElementById('results');
+        const $img = document.getElementById('result-image');
+        const $video = document.getElementById('result-video');
+        const $btnFinish = document.getElementById('btn-finish');
+
+        let lastWorldStages = [];
+
+        // Floating debug panel
+        const dbg = document.createElement('div');
+        dbg.style.position = 'fixed';
+        dbg.style.right = '12px';
+        dbg.style.top = '12px';
+        dbg.style.zIndex = '1000';
+        dbg.style.background = 'rgba(0,0,0,0.6)';
+        dbg.style.border = '1px solid rgba(0,255,220,0.3)';
+        dbg.style.borderRadius = '12px';
+        dbg.style.padding = '10px 12px';
+        dbg.style.color = '#fff';
+        dbg.style.fontFamily = 'Outfit, sans-serif';
+        dbg.style.maxWidth = '40vw';
+        dbg.style.fontSize = '12px';
+        dbg.innerHTML = '<div style="font-weight:700;margin-bottom:6px">Debug</div><div id="dbg-key"></div><div id="dbg-hear" style="margin-top:6px"></div><div id="dbg-txt" style="margin-top:6px"></div><div id="dbg-aiq" style="margin-top:6px"></div><div id="dbg-ain" style="margin-top:6px"></div>';
+        document.body.appendChild(dbg);
+        const keyPrev = getOpenAIKeyPreview();
+        document.getElementById('dbg-key').textContent = `Key found: ${keyPrev.found ? 'yes' : 'no'} | preview: ${keyPrev.preview}`;
+
+        const chat = createAIEntityChat({
+            email,
+            onTranscript: (txt) => { $t.textContent = 'Você: ' + txt; document.getElementById('dbg-txt').textContent = 'Transcrito: ' + (txt || '[vazio]'); },
+            onAIQuestion: (q) => { $q.textContent = q; document.getElementById('dbg-aiq').textContent = 'Pergunta AI: ' + q; },
+            onAINarration: (n) => { $n.textContent = n; document.getElementById('dbg-ain').textContent = 'Narração AI: ' + n; },
+            onWorldUpdate: ({ worldStages }) => { lastWorldStages = worldStages; },
+            onFinish: async (worldStages) => {
+                // Show loading, then generate assets
+                $loading.classList.add('show');
+                $progress.textContent = 'Gerando imagem...';
+                try {
+                    const imageDataUrl = await generateFinalWorldImage(worldStages);
+                    $img.src = imageDataUrl;
+                    $progress.textContent = 'Gerando vídeo...';
+                    const { url } = await renderKenBurnsVideoFromImage(imageDataUrl, { durationMs: 10000, fps: 30 });
+                    $video.src = url;
+                    $results.style.display = 'block';
+                    $progress.textContent = 'Concluído!';
+                    $btnFinish.style.display = 'inline-block';
+                } catch (err) {
+                    console.error(err);
+                    $progress.textContent = 'Falha ao gerar imagem/vídeo.';
+                    $btnFinish.style.display = 'inline-block';
+                }
+            },
+            onDebug: {
+                onHearStart: () => { document.getElementById('dbg-hear').textContent = 'Ouvindo...' },
+                onTranscribed: (t) => { document.getElementById('dbg-hear').textContent = 'Captura concluída.'; document.getElementById('dbg-txt').textContent = 'Transcrito: ' + (t || '[vazio]'); },
+                onAIQuestion: (q) => { document.getElementById('dbg-aiq').textContent = 'Pergunta AI: ' + q; },
+                onAINarration: (n) => { document.getElementById('dbg-ain').textContent = 'Narração AI: ' + n; }
+            }
+        });
+
+        document.getElementById('btn-exit').addEventListener('click', () => {
+            soundWave.stop();
+            window.location.href = 'presentation-scene.html';
+        });
+
+        $btnFinish.addEventListener('click', () => {
+            $loading.classList.remove('show');
+        });
+
+        // Start loop
+        console.log('[ai-entity] Iniciando chat...');
+        chat.start();
+        console.log('[ai-entity] Chat iniciado!');
+        })();
+    </script>
+</body>
+</html>
+
+

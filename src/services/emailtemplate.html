@@ -1,0 +1,67 @@
+<!-- Email futurista em PT-BR, responsivo, com paleta do projeto (preto, ciano/verde neon) -->
+<div style="margin:0;padding:0;background:#000000;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;background:#000;
+    background-image: radial-gradient(rgba(0,255,220,0.10) 1px, transparent 1px),
+                      radial-gradient(rgba(0,180,255,0.08) 1px, transparent 1px),
+                      linear-gradient(180deg, rgba(0,10,12,0.9), rgba(0,0,0,0.95));
+    background-size: 6px 6px, 10px 10px, 100% 100%; background-position: 0 0, 0 0, 0 0;">
+    <tr>
+      <td align="center" style="padding:24px 12px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:640px;border-collapse:collapse;
+          border:1px solid rgba(0,255,220,0.25); border-radius:16px; overflow:hidden;
+          box-shadow:0 0 28px rgba(0,255,220,0.18), inset 0 0 18px rgba(0,255,220,0.06);">
+          <tr>
+            <td align="center" style="padding:22px 18px;background:linear-gradient(180deg, rgba(0,15,18,0.85), rgba(0,0,0,0.9));">
+              <div style="font-family: 'Outfit', Arial, Helvetica, sans-serif; color:#A0FFF0; font-size:12px; letter-spacing:2px; text-transform:uppercase;">
+                Jornada Concluída
+              </div>
+              <div style="height:6px"></div>
+              <div style="font-family: 'Outfit', Arial, Helvetica, sans-serif; color:#FFFFFF; font-size:24px; font-weight:700; text-shadow:0 0 12px rgba(0,255,220,0.35);">
+                Olá de novo, Viajante! Este é o retrato do seu mundo
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:18px;background:rgba(0,0,0,0.95);">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+                <tr>
+                  <td style="font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size:15px; line-height:22px; color:#E6FFFB;">
+                    <p style="margin:0 0 12px 0;">
+                      Obrigado por vivenciar nossa jornada. Abaixo está a imagem final do seu mundo,
+                      gerada a partir das suas escolhas. Ela apresenta uma linha do tempo horizontal com os
+                      marcos mais importantes da sua trajetória.
+                    </p>
+                    <p style="margin:0 0 12px 0; color:#8AF7E8;">
+                      Dica: visualize em tela cheia para apreciar os detalhes de luz e atmosfera.
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding:10px 0;">
+                    <!-- A imagem final é injetada via variável image_base64 enviada pelo EmailJS -->
+                    <img src="{{image_base64}}" alt="Mundo Final" style="display:block;width:100%;max-width:960px;height:auto;border-radius:12px;border:1px solid rgba(0,255,220,0.25);
+                      box-shadow:0 0 22px rgba(0,255,220,0.18), inset 0 0 12px rgba(0,255,220,0.08);" />
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size:14px; line-height:21px; color:#CFFBF4;">
+                    <p style="margin:14px 0 0 0;">
+                      Anexe esta lembrança ao seu acervo pessoal! Se gostou da experiência, compartilhe com seus amigos e vote no nosso projeto!
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:14px;background:linear-gradient(180deg, rgba(0,0,0,0.95), rgba(0,15,18,0.85)); border-top:1px solid rgba(0,255,220,0.2);">
+              <div style="font-family: 'Outfit', Arial, Helvetica, sans-serif; color:#8AF7E8; font-size:12px; opacity:0.9;">
+                Next | Fiap — 2025 · Obrigado por participar
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</div>

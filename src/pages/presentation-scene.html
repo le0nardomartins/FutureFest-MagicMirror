@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>Apresentação - Uma Jornada no Nosso Tempo</title>
     <link rel="stylesheet" href="../styles.css">
-    <link rel="stylesheet" href="styles/pages-styles.css">
+    <link rel="stylesheet" href="./styles/pages-styles.css">
     <style>
         /* Estilos específicos para a cena de apresentação */
         #sound-wave-container {
@@ -92,7 +92,7 @@
         </div>
         
         <button id="continue-button" class="continue-button" style="display: none;">
-            Continuar
+            Iniciar jornada
         </button>
     </div>
 
@@ -100,56 +100,122 @@
     <script src="../sound-wave-animation.js"></script>
     <script src="../game.js"></script>
     <script>
-        // Inicializar a cena de apresentação
+        // Inicialização protegida contra loops e sem recarregar ao continuar
         document.addEventListener('DOMContentLoaded', function() {
-            // Inicializar a animação de ondas sonoras
+            if (window.__presentationInitialized) return;
+            window.__presentationInitialized = true;
+
             const soundWave = new SoundWaveAnimation('sound-wave-container');
-            
-            // Conectar o áudio à animação
-            soundWave.connectAudio('presentation-audio');
-            
-            // Reproduzir o áudio após um pequeno atraso
-            setTimeout(() => {
-                soundWave.playAudio();
-                
-                // Mostrar o texto após o início do áudio
-                setTimeout(() => {
-                    const presentationText = document.getElementById('presentation-text');
-                    presentationText.style.opacity = '1';
-                }, 2000);
-                
-                // Mostrar o botão de continuar após o áudio terminar
-                const audioElement = document.getElementById('presentation-audio');
-                audioElement.onended = function() {
-                    const continueButton = document.getElementById('continue-button');
-                    continueButton.style.display = 'block';
-                    
-                    setTimeout(() => {
-                        continueButton.style.opacity = '1';
-                    }, 100);
-                };
-            }, 1000);
-            
-            // Configurar o botão de continuar
+            const audioElement = document.getElementById('presentation-audio');
+            const presentationText = document.getElementById('presentation-text');
             const continueButton = document.getElementById('continue-button');
-            continueButton.addEventListener('click', function() {
-                // Parar a animação e redirecionar para a próxima cena
-                soundWave.stop();
-                window.location.href = 'forest-scene.html';
-            });
-            
-            // Aplicar sons ao botão de continuar
             const hoverSound = document.getElementById('hover-sound');
             const clickSound = document.getElementById('click-sound');
-            
-            continueButton.addEventListener('mouseenter', function() {
-                hoverSound.currentTime = 0;
-                hoverSound.play().catch(e => console.log('Erro ao reproduzir som de hover:', e));
-            });
-            
+
+            soundWave.connectAudio('presentation-audio');
+
+            setTimeout(() => {
+                try { soundWave.playAudio(); } catch {}
+                setTimeout(() => { presentationText.style.opacity = '1'; }, 2000);
+                audioElement.onended = function() {
+                    continueButton.style.display = 'block';
+                    setTimeout(() => { continueButton.style.opacity = '1'; }, 100);
+                };
+            }, 500);
+
+            const showEmailOverlay = () => {
+                try { audioElement.pause(); } catch {}
+                soundWave.stop();
+                presentationText.style.opacity = '0';
+                continueButton.style.display = 'none';
+
+                // Fade para preto sobre toda a tela
+                const fade = document.createElement('div');
+                fade.id = 'fade-overlay';
+                fade.style.position = 'absolute';
+                fade.style.inset = '0';
+                fade.style.background = 'black';
+                fade.style.opacity = '0';
+                fade.style.transition = 'opacity 800ms ease';
+                fade.style.zIndex = '25';
+                document.getElementById('game-container').appendChild(fade);
+                // força reflow e anima
+                requestAnimationFrame(() => { fade.style.opacity = '1'; });
+
+                const buildCard = () => {
+                    const overlay = document.createElement('div');
+                    overlay.style.position = 'absolute';
+                    overlay.style.inset = '0';
+                    overlay.style.display = 'flex';
+                    overlay.style.alignItems = 'center';
+                    overlay.style.justifyContent = 'center';
+                    overlay.style.zIndex = '30';
+                    overlay.innerHTML = `
+                      <div style="width:min(560px,92vw);background:rgba(6,20,24,0.72);border:1px solid rgba(0,230,255,0.28);border-radius:18px;padding:26px;color:#fff;font-family:Outfit,sans-serif;box-shadow:0 0 30px rgba(0,230,255,0.25), inset 0 0 20px rgba(0,255,220,0.06)">
+                        <div style=\"font-size:26px;margin:0 0 10px;text-align:center;text-shadow:0 0 12px rgba(0,255,220,0.35)\">Antes de começarmos...</div>
+                        <div style=\"font-size:16px;opacity:.9;text-align:center;margin-bottom:14px\">Deixe seu email para receber o resultado final. Se preferir, você pode pular.</div>
+                        <div style=\"display:flex;gap:12px;margin-top:10px\">
+                          <input id=\"email-input-inline\" type=\"email\" placeholder=\"seu@email.com\" style=\"flex:1;padding:14px 16px;border-radius:12px;border:1px solid rgba(0,230,255,0.35);background:rgba(0,10,12,0.5);color:#fff;box-shadow:inset 0 0 10px rgba(0,255,220,0.08)\"/>
+                          <button id=\"btn-start-inline\" style=\"padding:12px 18px;border-radius:14px;border:1px solid rgba(0,230,255,0.55);background:linear-gradient(180deg, rgba(0,230,255,0.12), rgba(0,230,255,0.06));color:#fff;cursor:pointer;box-shadow:0 0 18px rgba(0, 200, 255, 0.25)\">Iniciar</button>
+                          <button id=\"btn-skip-inline\" style=\"padding:12px 18px;border-radius:14px;border:1px solid rgba(0,230,255,0.55);background:linear-gradient(180deg, rgba(0,230,255,0.12), rgba(0,230,255,0.06));color:#fff;cursor:pointer;box-shadow:0 0 18px rgba(0, 200, 255, 0.25)\">Pular</button>
+                        </div>
+                        <div style=\"font-size:12px;opacity:.8;text-align:center;margin-top:10px\">A jornada seguirá normalmente mesmo sem email.</div>
+                      </div>`;
+                    document.getElementById('game-container').appendChild(overlay);
+
+                    const hoverOn = (el) => {
+                        el.style.backgroundImage = 'linear-gradient(180deg, rgba(0,230,255,0.2), rgba(0,230,255,0.12))';
+                        el.style.transform = 'translateY(-1px)';
+                        el.style.boxShadow = '0 0 24px rgba(0, 230, 255, 0.8), 0 0 36px rgba(0, 255, 200, 0.4)';
+                    };
+                    const hoverOff = (el) => {
+                        el.style.backgroundImage = 'linear-gradient(180deg, rgba(0,230,255,0.12), rgba(0,230,255,0.06))';
+                        el.style.transform = 'translateY(0)';
+                        el.style.boxShadow = '0 0 18px rgba(0, 200, 255, 0.25)';
+                    };
+
+                    const goNext = (email) => {
+                      const params = new URLSearchParams();
+                      if ((email || '').trim()) params.set('email', email.trim());
+                      window.location.href = 'ai-entity.html' + (params.toString() ? ('?' + params.toString()) : '');
+                    };
+
+                    const btnStart = document.getElementById('btn-start-inline');
+                    const btnSkip = document.getElementById('btn-skip-inline');
+                    const emailInput = document.getElementById('email-input-inline');
+
+                    btnStart.addEventListener('mouseenter', function() {
+                        hoverSound.currentTime = 0; hoverSound.play().catch(() => {});
+                        hoverOn(btnStart);
+                    });
+                    btnStart.addEventListener('mouseleave', function() { hoverOff(btnStart); });
+                    btnSkip.addEventListener('mouseenter', function() {
+                        hoverSound.currentTime = 0; hoverSound.play().catch(() => {});
+                        hoverOn(btnSkip);
+                    });
+                    btnSkip.addEventListener('mouseleave', function() { hoverOff(btnSkip); });
+
+                    btnStart.addEventListener('click', function() {
+                        clickSound.currentTime = 0; clickSound.play().catch(() => {});
+                        goNext(emailInput.value);
+                    });
+                    btnSkip.addEventListener('click', function() {
+                        clickSound.currentTime = 0; clickSound.play().catch(() => {});
+                        goNext('');
+                    });
+                };
+
+                fade.addEventListener('transitionend', buildCard, { once: true });
+            };
+
             continueButton.addEventListener('click', function() {
                 clickSound.currentTime = 0;
-                clickSound.play().catch(e => console.log('Erro ao reproduzir som de clique:', e));
+                clickSound.play().catch(() => {});
+                showEmailOverlay();
+            });
+            continueButton.addEventListener('mouseenter', function() {
+                hoverSound.currentTime = 0;
+                hoverSound.play().catch(() => {});
             });
         });
     </script>
