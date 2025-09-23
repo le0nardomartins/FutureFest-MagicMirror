@@ -20,27 +20,6 @@ cd uma-jornada-no-nosso-tempo
 npm install
 ```
 
-## 💻 Como Rodar
-
-Você pode rodar o jogo de duas maneiras:
-
-1. Usando o arquivo batch (Windows):
-```bash
-start run-game.bat
-```
-
-2. Usando npm diretamente:
-```bash
-npm start
-```
-
-## 🎮 Como Jogar
-
-1. Clique em "Iniciar Jornada" na tela inicial
-2. Assista aos vídeos das cenas
-3. Escolha uma das duas opções disponíveis após cada cena
-4. Suas escolhas afetarão o desenvolvimento da história
-
 ## 🛠️ Tecnologias Utilizadas
 
 - [Electron](https://www.electronjs.org/)

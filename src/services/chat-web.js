@@ -127,7 +127,7 @@ const transcribeWithOpenAI = async (audioBlob, { language = 'pt' } = {}) => {
 };
 
 // ElevenLabs TTS synthesis -> returns object URL (ONLY ElevenLabs, no fallback)
-const synthesizeWithElevenLabs = async (text, { voiceId = getELEVENLABS_VOICE_ID(), stability = 0.5, similarityBoost = 0.5 } = {}) => {
+const synthesizeWithElevenLabs = async (text, { voiceId = getELEVENLABS_VOICE_ID(), stability = 0.8, similarityBoost = 0.8 } = {}) => {
   console.log('[chat-web] ElevenLabs TTS - Texto:', text.slice(0, 50) + '...');
   console.log('[chat-web] ElevenLabs TTS - Voice ID:', voiceId);
   console.log('[chat-web] ElevenLabs TTS - API Key:', (getELEVENLABS_API_KEY() || '').slice(0, 10) + '...');
@@ -151,7 +151,9 @@ const synthesizeWithElevenLabs = async (text, { voiceId = getELEVENLABS_VOICE_ID
       model_id: 'eleven_multilingual_v2',
       voice_settings: { 
         stability, 
-        similarity_boost: similarityBoost 
+        similarity_boost: similarityBoost,
+        style: 0.2,
+        use_speaker_boost: true
       } 
     })
   });
@@ -204,7 +206,9 @@ const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
     '- Output MUST be PLAIN TEXT only (no JSON, no Markdown, no triple backticks).',
     '- Decision axis is STRICTLY ENVIRONMENTAL and GLOBAL (for all humanity). Never target local groups or isolated cases. Choices must reflect what the majority of humanity would choose.',
     '- If the environment is already irreversibly degraded according to the context, broaden the decision to global survival/remediation (still global, affecting all humanity).',
-    '- Stages 2..15: First write a 2-3 sentence NARRATION covering climate, society, culture, economy, technology and biodiversity (environmental-centric, showing consequences across aspects). The narration MUST explicitly evaluate the PREVIOUS USER ANSWER as if it were adopted by the majority of humanity: state if it worked or not and briefly explain why. Then ask EXACTLY ONE objective, GLOBAL, environmental QUESTION (no extra context).',
+    '- CRITICAL: Each stage must present NEW environmental challenges. When one problem is solved, another must emerge. From stage 10 onwards, problems become more intense and require more difficult, specific solutions.',
+    '- PAST MISTAKES: If previous decisions created problems, these must resurface and compound with new challenges. The AI must narrate how past errors are now causing consequences.',
+    '- Stages 2..15: First write a 2-3 sentence NARRATION covering climate, society, culture, economy, technology and biodiversity (environmental-centric, showing consequences across aspects). The narration MUST explicitly evaluate the PREVIOUS USER ANSWER as if it were adopted by the majority of humanity: state if it worked or not and briefly explain why. Then introduce the NEW environmental challenge that emerged. Then ask EXACTLY ONE objective, GLOBAL, environmental QUESTION (no extra context).',
     '- Stage 1: DO NOT narrate; ask ONLY ONE objective, GLOBAL, environmental question based on the initial context provided.',
     '- Pre-stage (context setup): write ONLY the initial world narration in 2-4 sentences (plain text).',
     '- Never use lists, bullets, or code blocks; only sentences.',
@@ -225,11 +229,12 @@ const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
     }
     if (stageNumber >= 10 && stageNumber < 15) {
       return [
-        `Estágio ${stageNumber} (preparando encerramento):`,
+        `Estágio ${stageNumber} (preparando encerramento - PROBLEMAS INTENSOS):`,
         '- Considere todas as respostas anteriores e avance a narrativa, mostrando efeitos AMBIENTAIS cumulativos e seus impactos globais em sociedade/cultura/economia/tecnologia/biodiversidade.',
         '- A narração DEVE começar avaliando explicitamente a resposta anterior do usuário como se fosse adotada pela maioria da humanidade: funcionou ou não? Por quê? Qual efeito ambiental imediato?',
-        '- Aponte sinais de fechamento e consequências de longo prazo.',
-        '- Proponha UMA nova situação e faça UMA pergunta AMBIENTAL e GLOBAL (escolha da maioria). Se o ambiente colapsou, foque em sobrevivência/remediação global.'
+        '- CRÍTICO: Apresente NOVOS problemas ambientais mais intensos e complexos. Se erros passados criaram problemas, eles devem ressurgir agora com consequências piores.',
+        '- Os problemas devem exigir soluções mais difíceis, específicas e tecnologicamente avançadas.',
+        '- Proponha UMA nova situação complexa e faça UMA pergunta AMBIENTAL e GLOBAL (escolha da maioria). Se o ambiente colapsou, foque em sobrevivência/remediação global.'
       ].join('\n');
     }
     if (stageNumber >= 15) {
@@ -247,6 +252,8 @@ const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
       '- Considere respostas anteriores e o estado do mundo acumulado.',
       '- Construa uma nova NARRAÇÃO (2-3 frases) cobrindo clima, sociedade, cultura, economia, tecnologia e biodiversidade, sempre a partir do eixo AMBIENTAL e com escopo GLOBAL.',
       '- A narração DEVE iniciar avaliando explicitamente a resposta anterior do usuário como se a maioria da humanidade a tivesse adotado: funcionou ou não? Diga por quê e quais efeitos ambientais ocorreram.',
+      '- CRÍTICO: Apresente um NOVO problema ambiental que surgiu. Quando um problema é resolvido, outro deve emergir naturalmente.',
+      '- Se erros passados criaram problemas, eles devem ressurgir agora com consequências.',
       '- Proponha UMA pergunta única ESTRITAMENTE AMBIENTAL e GLOBAL (a escolha do usuário representa a decisão da maioria da humanidade). Se o ambiente colapsou, pergunte sobre sobrevivência/remediação em escala global.'
     ].join('\n');
   };
