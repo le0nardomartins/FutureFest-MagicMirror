@@ -62,6 +62,7 @@
                 console.log("Reprodução automática bloqueada pelo navegador:", error);
                 // Ativa som na primeira interação do usuário
                 const tryEnable = () => {
+                    backgroundMusic.muted = false;
                     backgroundMusic.play().then(() => {
                         window.removeEventListener('pointerdown', tryEnable);
                         window.removeEventListener('keydown', tryEnable);

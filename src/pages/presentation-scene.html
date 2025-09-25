@@ -10,6 +10,11 @@
     <meta name="EMAILJS_SERVICE_ID" content="">
     <meta name="EMAILJS_TEMPLATE_ID" content="">
     <meta name="EMAILJS_PUBLIC_KEY" content="">
+    <meta name="CLOUD_NAME" content="">
+    <meta name="API_KEY" content="">
+    <meta name="API_SECRET" content="">
+    <meta name="CLOUDINARY_URL" content="">
+    <meta name="CLOUDINARY_UPLOAD_PRESET" content="">
     <link rel="apple-touch-icon" sizes="180x180" href="../assets/favicon/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon/favicon-16x16.png">
@@ -118,6 +123,7 @@
             <button id="dbg-send-image" class="btn">Testar gerar/enviar imagem</button>
             <button id="dbg-final-context" class="btn">Simular encerramento</button>
             <button id="dbg-test-emailjs" class="btn">Testar EmailJS</button>
+            <button id="dbg-go-credits" class="btn">Ir para Créditos</button>
         </div>
         <button id="dev-switch">Dev: OFF</button>
     </div>
@@ -132,7 +138,12 @@
                 'ELEVENLABS_VOICE_ID',
                 'EMAILJS_SERVICE_ID',
                 'EMAILJS_TEMPLATE_ID',
-                'EMAILJS_PUBLIC_KEY'
+                'EMAILJS_PUBLIC_KEY',
+                'CLOUD_NAME',
+                'API_KEY',
+                'API_SECRET',
+                'CLOUDINARY_URL',
+                'CLOUDINARY_UPLOAD_PRESET'
             ];
             try {
                 const response = await fetch('/api/env');
@@ -169,6 +180,7 @@
             const dbgSend = document.getElementById('dbg-send-image');
             const dbgFinal = document.getElementById('dbg-final-context');
             const dbgTestEmail = document.getElementById('dbg-test-emailjs');
+            const dbgGoCredits = document.getElementById('dbg-go-credits');
             const devSwitch = document.getElementById('dev-switch');
 
             soundWave.connectAudio('presentation-audio');
@@ -355,6 +367,12 @@
                     msg += `Init: falhou (${e && e.message})`;
                 }
                 alert(msg);
+            });
+
+            // Debug: ir direto para créditos
+            dbgGoCredits.addEventListener('click', () => {
+                try { clickSound.currentTime = 0; clickSound.play().catch(() => {}); } catch {}
+                window.location.href = 'credits-scene.html';
             });
 
             // Dev switch: mostra/oculta elementos com data-dev-only

@@ -13,7 +13,7 @@ const __dataUrlSizeBytes = (dataUrl) => {
 };
 
 // Utilitário: reamostra/comprime dataURL para caber no limite (default 50KB)
-const __compressDataUrlToLimit = async (dataUrl, { maxBytes = 48 * 1024, mime = 'image/jpeg' } = {}) => {
+const __compressDataUrlToLimit = async (dataUrl, { maxBytes = 40 * 1024, mime = 'image/jpeg' } = {}) => {
   try {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -21,29 +21,56 @@ const __compressDataUrlToLimit = async (dataUrl, { maxBytes = 48 * 1024, mime = 
     img.src = dataUrl;
     await load();
 
-    let width = img.naturalWidth || img.width;
-    let height = img.naturalHeight || img.height;
+    const width = img.naturalWidth || img.width;
+    const height = img.naturalHeight || img.height;
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
 
-    let quality = 0.8;
-    for (let step = 0; step < 10; step++) {
-      // Reduz dimensões progressivamente a partir de 0.75, depois 0.6, etc.
-      const scale = [1, 0.85, 0.75, 0.66, 0.5, 0.4, 0.33, 0.25, 0.2, 0.16][step] || 0.16;
-      canvas.width = Math.max(64, Math.floor(width * scale));
-      canvas.height = Math.max(64, Math.floor(height * scale));
+    // Escalas e qualidades progressivas
+    const scales = [1.0, 0.8, 0.66, 0.5, 0.4, 0.33, 0.25];
+    const qualities = [0.7, 0.6, 0.5, 0.4, 0.3, 0.25, 0.2];
+    let best = dataUrl;
+    let bestOvershoot = Infinity;
+
+    for (const s of scales) {
+      canvas.width = Math.max(96, Math.floor(width * s));
+      canvas.height = Math.max(96, Math.floor(height * s));
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      let out = canvas.toDataURL(mime, quality);
-      if (__dataUrlSizeBytes(out) <= maxBytes) return out;
-      // reduz qualidade se ainda estiver grande
-      quality = Math.max(0.4, quality - 0.1);
+      for (const q of qualities) {
+        const out = canvas.toDataURL(mime, q);
+        const bytes = __dataUrlSizeBytes(out);
+        if (bytes <= maxBytes) return out; // Achou tamanho ok
+        const over = bytes - maxBytes;
+        if (over < bestOvershoot) { bestOvershoot = over; best = out; }
+      }
     }
-    // Retorna a melhor tentativa mesmo que ultrapasse um pouco
-    return canvas.toDataURL(mime, 0.4);
+    // Retorna melhor tentativa se não couber
+    return best;
   } catch {
     return dataUrl;
   }
+};
+
+// Faz upload no Cloudinary e retorna URL segura
+const __uploadToCloudinary = async (dataUrl) => {
+  // Obtém env via meta tags preenchidas pelo /api/env
+  const cloudName = (window.__getEnvVar && window.__getEnvVar('CLOUD_NAME')) || '';
+  const cloudURL = (window.__getEnvVar && window.__getEnvVar('CLOUDINARY_URL')) || '';
+  if (!(cloudName || cloudURL)) throw new Error('Cloudinary env ausente');
+
+  // Se CLOUDINARY_URL existir, podemos usar unsigned upload com preset ou a própria URL.
+  // Para simplicidade e envio em tamanho original, usamos endpoint padrão sem reamostrar.
+  const form = new FormData();
+  form.append('file', dataUrl);
+  // Upload preset público (unsigned) fixo
+  form.append('upload_preset', 'default_preset');
+
+  const base = cloudName ? `https://api.cloudinary.com/v1_1/${cloudName}` : (cloudURL.split('@')[1] ? `https://api.cloudinary.com/v1_1/${cloudURL.split('@')[1]}` : '');
+  const resp = await fetch(`${base}/image/upload`, { method: 'POST', body: form });
+  if (!resp.ok) { const err = await resp.text(); throw new Error(`upload cloudinary: ${resp.status} - ${err}`); }
+  const data = await resp.json();
+  return data.secure_url || data.url;
 };
 
 window.emailjsSendImage = async ({ to, imageDataUrl }) => {
@@ -86,19 +113,16 @@ window.emailjsSendImage = async ({ to, imageDataUrl }) => {
 
     window.emailjs.init(publicKey);
 
-    // EmailJS limita o tamanho total das variáveis (~50KB). Comprimir se necessário.
-    let payloadDataUrl = imageDataUrl;
-    const sizeBytes = __dataUrlSizeBytes(payloadDataUrl);
-    if (sizeBytes > 48 * 1024) {
-      payloadDataUrl = await __compressDataUrlToLimit(payloadDataUrl, { maxBytes: 47 * 1024, mime: 'image/jpeg' });
-    }
+    // Em vez de enviar base64 enorme para o EmailJS, subimos ao Cloudinary e mandamos URL
+    // Sobe em tamanho original (ou levemente comprimido apenas se desejado)
+    const imageUrl = await __uploadToCloudinary(imageDataUrl);
 
     const targetEmail = (to && String(to).trim()) ? String(to).trim() : 'leonardomartins140124@gmail.com';
     const result = await window.emailjs.send(serviceId, templateId, {
       to_email: targetEmail,
       to: targetEmail,
       user_email: targetEmail,
-      image_base64: payloadDataUrl
+      image_url: imageUrl
     });
     return result;
   } catch (e) {
