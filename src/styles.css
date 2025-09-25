@@ -506,6 +506,12 @@ h1 {
     box-shadow: 0 0 15px rgba(46, 204, 113, 0.8), 0 0 30px rgba(52, 152, 219, 0.5);
 }
 
+/* Remover borda/halo verde do botão de tela cheia da home */
+#fullscreen-btn {
+    border: none !important;
+    box-shadow: none !important;
+}
+
 /* Regras globais para ocultar o cursor padrão */
 html, body, button, a, input, select, textarea, [role="button"] {
     cursor: none !important;

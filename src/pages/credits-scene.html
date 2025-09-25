@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Créditos - Jornada no Tempo</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="../assets/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon/favicon-16x16.png">
+    <link rel="manifest" href="../assets/favicon/site.webmanifest">
+    <link rel="icon" href="../assets/favicon/favicon.ico">
     <style>
         /* Regras globais para ocultar o cursor */
         html, body, button, a, input, select, textarea, [role="button"] {
@@ -22,8 +27,8 @@
         body {
             margin: 0;
             padding: 0;
-            background-color: #030508;
-            color: #ecf0f1;
+            background: radial-gradient(circle at 30% 20%, #091423, #030508 60%, #010307);
+            color: #E9FBF7;
             font-family: 'Outfit', 'Segoe UI', Arial, sans-serif;
             height: 100vh;
             display: flex;
@@ -72,17 +77,17 @@
 
         .credit-title {
             font-size: 2.5em;
-            color: #2ecc71;
-            text-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
+            color: #A0FFF0;
+            text-shadow: 0 0 10px rgba(0, 255, 220, 0.5);
             margin-bottom: 20px;
             font-family: 'Dune Rise', sans-serif;
         }
 
         .credit-name {
             font-size: 1.8em;
-            color: #3498db;
+            color: #FFDCA8;
             margin: 10px 0;
-            text-shadow: 0 0 8px rgba(52, 152, 219, 0.5);
+            text-shadow: 0 0 8px rgba(255, 220, 168, 0.5);
         }
 
         .credit-role {
@@ -108,8 +113,8 @@
             padding: 15px 40px;
             font-size: 1.2em;
             background: transparent;
-            color: #ecf0f1;
-            border: 2px solid #2ecc71;
+            color: #E9FBF7;
+            border: 2px solid rgba(0,255,220,0.6);
             border-radius: 30px;
             cursor: none;
             transition: all 0.3s ease;
@@ -118,9 +123,11 @@
         }
 
         #return-button:hover {
-            background: rgba(46, 204, 113, 0.2);
-            box-shadow: 0 0 20px rgba(46, 204, 113, 0.5);
+            background: rgba(0, 255, 220, 0.15);
+            box-shadow: 0 0 20px rgba(0, 255, 220, 0.5);
         }
+        #skip-credits { position: fixed; right: 20px; bottom: 20px; padding: 10px 16px; border-radius: 14px; border:1px solid rgba(0,255,220,0.6); background: transparent; color:#E9FBF7; cursor:none; opacity:0; animation: showButton 2s ease 6s forwards; }
+        #fade-overlay { position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; transition: opacity 1.2s ease; }
 
         @keyframes showButton {
             to {
@@ -133,8 +140,8 @@
     <div class="cursor"></div>
     <div class="cursor-trail"></div>
 
-    <audio id="credits-audio" preload="auto">
-        <source src="../assets/audio/credits.wav" type="audio/wav">
+    <audio id="credits-audio" preload="auto" autoplay playsinline loop>
+        <source src="../assets/audio/main-theme.wav" type="audio/wav">
         Seu navegador não suporta o elemento de áudio.
     </audio>
 
@@ -143,36 +150,19 @@
         
         <div id="credits-content">
             <div class="credit-section">
-                <div class="credit-title">Jornada no Tempo</div>
-                <div class="credit-role">Uma Experiência Interativa</div>
+                <div class="credit-title">Iniciação Científica</div>
+                <div class="credit-name">Jornada do Tempo</div>
+                <div class="credit-role">FIAP • NEXT • 2025</div>
             </div>
-
             <div class="credit-section">
-                <div class="credit-title">Desenvolvimento</div>
-                <div class="credit-name">Equipe de Desenvolvimento</div>
-                <div class="credit-role">Programação e Design</div>
-            </div>
-
-            <div class="credit-section">
-                <div class="credit-title">Arte e Animação</div>
-                <div class="credit-name">Artistas Visuais</div>
-                <div class="credit-role">Design Visual e Animações</div>
-            </div>
-
-            <div class="credit-section">
-                <div class="credit-title">Música e Som</div>
-                <div class="credit-name">Compositores</div>
-                <div class="credit-role">Trilha Sonora Original</div>
-            </div>
-
-            <div class="credit-section">
-                <div class="credit-title">Agradecimentos Especiais</div>
-                <div class="credit-name">A todos que tornaram este projeto possível</div>
-                <div class="credit-role">Obrigado por fazer parte desta jornada</div>
+                <div class="credit-name">Obrigado por acompanhar</div>
+                <div class="credit-role">A jornada termina aqui</div>
             </div>
         </div>
 
         <button id="return-button">Voltar ao Início</button>
+        <button id="skip-credits">Pular Créditos</button>
+        <div id="fade-overlay"></div>
     </div>
 
     <script src="../sound-wave-animation.js"></script>
@@ -184,13 +174,19 @@
             // Conectar e reproduzir áudio
             soundWave.connectAudio('credits-audio');
             const audioElement = document.getElementById('credits-audio');
-            audioElement.play();
+            try { audioElement.volume = 0.7; audioElement.play(); } catch {}
 
-            // Configurar botão de retorno
+            // Configurar botões
             const returnButton = document.getElementById('return-button');
-            returnButton.addEventListener('click', () => {
-                window.location.href = 'menu-screen.html';
-            });
+            const skipButton = document.getElementById('skip-credits');
+            const fade = document.getElementById('fade-overlay');
+
+            const goHome = () => {
+                fade.style.opacity = '1';
+                setTimeout(() => { window.location.href = '../index.html'; }, 1200);
+            };
+            returnButton.addEventListener('click', goHome);
+            skipButton.addEventListener('click', goHome);
         });
     </script>
 </body>

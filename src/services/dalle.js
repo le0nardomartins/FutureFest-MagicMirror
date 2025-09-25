@@ -40,14 +40,24 @@ const buildOpenAIHeaders = async () => {
   return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` };
 };
 
+const urlToDataUrl = async (url) => {
+  const resp = await fetch(url);
+  const blob = await resp.blob();
+  return await new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(blob);
+  });
+};
+
 const generateFinalWorldImage = async (worldStages) => {
   try {
-    const key = (OPENAI_API_KEY || '').trim();
+    const key = (getOPENAI_API_KEY() || '').trim();
     if (!key) throw new Error('OPENAI_API_KEY ausente');
 
     const last = worldStages[worldStages.length - 1] || {};
     const summary = (worldStages || []).map((s, i) => `Estágio ${i+1}: ${s.narration || s.worldNarration || ''}`).join('\n');
-    const prompt = `Crie uma imagem fotorrealista e cinematográfica do mundo final do usuário após 15 estágios de transformação. Contexto resumido:\n${summary}\n\nDescrição final do mundo: ${last.worldState ? JSON.stringify(last.worldState) : (last.worldNarration || last.narration || '')}.\n\nEstilo: épico, tons naturais, alto detalhe, volumetric lighting, ultra-detalhado.`;
+    const prompt = `Crie uma imagem fotorrealista e cinematográfica do mundo final do usuário após 8 estágios de transformação. Contexto resumido:\n${summary}\n\nDescrição final do mundo: ${last.worldState ? JSON.stringify(last.worldState) : (last.worldNarration || last.narration || '')}.\n\nEstilo: épico, tons naturais, alto detalhe, volumetric lighting, ultra-detalhado.`;
 
     const response = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
@@ -56,8 +66,7 @@ const generateFinalWorldImage = async (worldStages) => {
         model: 'gpt-image-1',
         prompt,
         size: '1024x1024',
-        quality: 'high',
-        response_format: 'b64_json'
+        quality: 'high'
       })
     });
 
@@ -67,9 +76,11 @@ const generateFinalWorldImage = async (worldStages) => {
     }
 
     const data = await response.json();
-    const b64 = (data && data.data && data.data[0] && data.data[0].b64_json) || '';
-    if (!b64) throw new Error('Imagem não retornada');
-    return `data:image/png;base64,${b64}`;
+    const item = data && data.data && data.data[0];
+    if (!item) throw new Error('Imagem não retornada');
+    if (item.b64_json) return `data:image/png;base64,${item.b64_json}`;
+    if (item.url) return await urlToDataUrl(item.url);
+    throw new Error('Formato de imagem desconhecido');
   } catch (error) {
     console.error('generateFinalWorldImage error:', error);
     throw error;
@@ -79,12 +90,12 @@ const generateFinalWorldImage = async (worldStages) => {
 // Gera imagem 1920x1080 com linha do tempo horizontal a partir de um resumo textual
 const generateTimelineImage = async (timelineSummary) => {
   try {
-    const key = (OPENAI_API_KEY || '').trim();
+    const key = (getOPENAI_API_KEY() || '').trim();
     if (!key) throw new Error('OPENAI_API_KEY ausente');
 
     const basePrompt = [
       'Crie uma única imagem 1920x1080 (paisagem) que represente, em uma linha do tempo horizontal,',
-      'os eventos mais marcantes da trajetória do mundo do usuário em 15 estágios.',
+      'os eventos mais marcantes da trajetória do mundo do usuário em 8 estágios.',
       'Use um estilo cinematográfico, com boa legibilidade visual, separadores claros entre marcos,',
       'elementos ambientais/sociais/tecnológicos, e cores que ajudem a leitura cronológica da esquerda para a direita.',
       'Não inclua textos longos; prefira ícones/símbolos/imagens que representem cada marco.',
@@ -99,8 +110,7 @@ const generateTimelineImage = async (timelineSummary) => {
         model: 'gpt-image-1',
         prompt: basePrompt,
         size: '1920x1080',
-        quality: 'high',
-        response_format: 'b64_json'
+        quality: 'high'
       })
     });
 
@@ -110,9 +120,11 @@ const generateTimelineImage = async (timelineSummary) => {
     }
 
     const data = await response.json();
-    const b64 = (data && data.data && data.data[0] && data.data[0].b64_json) || '';
-    if (!b64) throw new Error('Imagem (timeline) não retornada');
-    return `data:image/png;base64,${b64}`;
+    const item = data && data.data && data.data[0];
+    if (!item) throw new Error('Imagem (timeline) não retornada');
+    if (item.b64_json) return `data:image/png;base64,${item.b64_json}`;
+    if (item.url) return await urlToDataUrl(item.url);
+    throw new Error('Formato de imagem desconhecido');
   } catch (error) {
     console.error('generateTimelineImage error:', error);
     throw error;

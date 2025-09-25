@@ -3,6 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <title>Apresentação - Uma Jornada no Nosso Tempo</title>
+    <!-- Variáveis de ambiente para Vercel -->
+    <meta name="OPENAI_API_KEY" content="">
+    <meta name="ELEVENLABS_API_KEY" content="">
+    <meta name="ELEVENLABS_VOICE_ID" content="">
+    <meta name="EMAILJS_SERVICE_ID" content="">
+    <meta name="EMAILJS_TEMPLATE_ID" content="">
+    <meta name="EMAILJS_PUBLIC_KEY" content="">
+    <link rel="apple-touch-icon" sizes="180x180" href="../assets/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon/favicon-16x16.png">
+    <link rel="manifest" href="../assets/favicon/site.webmanifest">
+    <link rel="icon" href="../assets/favicon/favicon.ico">
     <link rel="stylesheet" href="../styles.css">
     <link rel="stylesheet" href="./styles/pages-styles.css">
     <style>
@@ -61,6 +73,12 @@
             transform: translateX(-50%) scale(1.05);
             box-shadow: 0 0 20px rgba(0, 230, 255, 0.7), 0 0 30px rgba(0, 255, 200, 0.4);
         }
+        .skip-btn { position:absolute; right: 18px; bottom: 18px; z-index: 30; }
+        .debug-bar { position:absolute; left: 18px; bottom: 18px; z-index:30; display:flex; gap:8px; align-items:center; }
+        .debug-bar input { padding: 8px 10px; border-radius:10px; border:1px solid rgba(0,255,220,0.35); background: rgba(0,0,0,0.35); color:#fff; width:min(340px, 40vw); }
+        .btn { padding: 8px 12px; border-radius:10px; border:1px solid rgba(0,255,220,0.5); background: rgba(0,0,0,0.35); color:#fff; cursor:pointer; }
+        .btn:hover { background: rgba(0,255,220,0.12); }
+        #dev-switch { position:fixed; left:12px; top:12px; z-index:40; padding:6px 10px; border-radius:10px; border:1px solid rgba(0,255,220,0.5); background: rgba(0,0,0,0.35); color:#fff; cursor:pointer; }
     </style>
 </head>
 <body>
@@ -94,10 +112,45 @@
         <button id="continue-button" class="continue-button" style="display: none;">
             Iniciar jornada
         </button>
+        <button id="btn-skip-to-ai" class="btn skip-btn" data-dev-only>Â Pular apresentação</button>
+        <div class="debug-bar" data-dev-only>
+            <input id="dbg-text" placeholder="Digite um prompt para teste" />
+            <button id="dbg-send-image" class="btn">Testar gerar/enviar imagem</button>
+            <button id="dbg-final-context" class="btn">Simular encerramento</button>
+            <button id="dbg-test-emailjs" class="btn">Testar EmailJS</button>
+        </div>
+        <button id="dev-switch">Dev: OFF</button>
     </div>
 
     <script src="../cursor-effects.js"></script>
+    <script>
+        // Preenche as meta tags com as variáveis de ambiente da Vercel (igual na ai-entity)
+        (async function() {
+            const envVars = [
+                'OPENAI_API_KEY',
+                'ELEVENLABS_API_KEY', 
+                'ELEVENLABS_VOICE_ID',
+                'EMAILJS_SERVICE_ID',
+                'EMAILJS_TEMPLATE_ID',
+                'EMAILJS_PUBLIC_KEY'
+            ];
+            try {
+                const response = await fetch('/api/env');
+                if (response.ok) {
+                    const envData = await response.json();
+                    envVars.forEach(key => {
+                        const meta = document.querySelector(`meta[name="${key}"]`);
+                        if (meta && envData[key]) meta.setAttribute('content', envData[key]);
+                    });
+                }
+            } catch (error) { console.error('[env] erro ao carregar env na apresentação:', error); }
+        })();
+    </script>
+    <!-- SDK oficial do EmailJS (necessário para window.emailjs) -->
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <script src="../sound-wave-animation.js"></script>
+    <script src="../services/emailjs.js"></script>
+    <script src="../services/dalle.js"></script>
     <script src="../game.js"></script>
     <script>
         // Inicialização protegida contra loops e sem recarregar ao continuar
@@ -111,6 +164,12 @@
             const continueButton = document.getElementById('continue-button');
             const hoverSound = document.getElementById('hover-sound');
             const clickSound = document.getElementById('click-sound');
+            const btnSkipToAI = document.getElementById('btn-skip-to-ai');
+            const dbgInput = document.getElementById('dbg-text');
+            const dbgSend = document.getElementById('dbg-send-image');
+            const dbgFinal = document.getElementById('dbg-final-context');
+            const dbgTestEmail = document.getElementById('dbg-test-emailjs');
+            const devSwitch = document.getElementById('dev-switch');
 
             soundWave.connectAudio('presentation-audio');
 
@@ -217,6 +276,101 @@
                 hoverSound.currentTime = 0;
                 hoverSound.play().catch(() => {});
             });
+            // Novo: pular apresentação direto para AI Entity
+            btnSkipToAI.addEventListener('click', function() {
+                try { clickSound.currentTime = 0; clickSound.play().catch(() => {}); } catch {}
+                soundWave.stop();
+                window.location.href = 'ai-entity.html';
+            });
+
+            // Debug: testar geração e envio de imagem por email (fixo ou email via URL)
+            dbgSend.addEventListener('click', async function() {
+                try {
+                    const params = new URLSearchParams(window.location.search);
+                    const email = 'leonardomartins140124@gmail.com';
+                    const narration = dbgInput.value || 'Mundo abandonado por desastres climáticos; cidades vazias, migrações em massa e ecossistemas colapsados.';
+                    const mockStages = [
+                        { narration },
+                        { narration: 'n/a' },{ narration: 'n/a' },{ narration: 'n/a' },{ narration: 'n/a' },{ narration: 'n/a' },{ narration: 'n/a' },{ narration: 'n/a' }
+                    ];
+                    const dataUrl = await generateFinalWorldImage(mockStages);
+                    if (email) {
+                        const { url } = await renderKenBurnsVideoFromImage(dataUrl, { durationMs: 3000, fps: 30 });
+                        console.log('Vídeo teste gerado:', url);
+                        if (window.emailjsSendImage) {
+                            try {
+                                await window.emailjsSendImage({ to: email, imageDataUrl: dataUrl });
+                                alert('Imagem enviada por email (teste).');
+                            } catch (e) {
+                                alert('Falha no envio por EmailJS: ' + (e && e.text ? e.text : (e && e.message ? e.message : 'erro desconhecido')));
+                            }
+                        } else {
+                            alert('EmailJS não configurado. Apenas gerada a imagem.');
+                        }
+                    } else {
+                        alert('Sem email. Gerei apenas a imagem para debug.');
+                    }
+                } catch (e) { console.error(e); alert('Falha no teste de imagem: ' + e.message); }
+            });
+
+            // Debug: simular contexto final (encerramento) sem passar pelos estágios
+            dbgFinal.addEventListener('click', async function() {
+                try {
+                    const userFinal = dbgInput.value || 'Encerramento: sociedade adaptada a eventos climáticos extremos; biodiversidade reduzida; tecnologia de captura de carbono em larga escala; qualidade de vida desigual.';
+                    const fakeHistory = Array.from({ length: 7 }).map((_, i) => ({ estagio: i+1, pergunta: '...', resposta_usuario: 'não sei', narracao: '...' }));
+                    const worldStages = [...fakeHistory, { estagio: 8, pergunta: null, resposta_usuario: userFinal, narracao: '' }];
+                    const messages = [
+                        { role: 'system', content: 'Você é o narrador de encerramento. Responda em PT-BR com texto puro, sem perguntas, sem listas e sem travessões. O texto deve começar exatamente com: "Você fez suas escolhas viajante, e então chegamos ao fim..." e seguir descrevendo cultura, vida, ambiente, clima e como a humanidade sobreviveu ou não. Use apenas ponto final e vírgulas (sem ponto e vírgula). Máximo de 3 a 4 frases curtas. Mantenha tom poético e feche com uma reflexão sutil, sem ponto de interrogação. Se o desfecho for ruim, declare que o viajante repetiu os caminhos dos antepassados, fez as mesmas escolhas e se isentou da culpa, antes de descrever o estado final.' },
+                        { role: 'user', content: `Considere que os estágios 1..7 tiveram respostas "não sei". No estágio 8, a última resposta do usuário foi: ${userFinal}. Gere um encerramento coeso seguindo as regras.` }
+                    ];
+                    // Usa a mesma chave já carregada
+                    const headers = await (async () => {
+                        const key = (window.__getEnvVar && window.__getEnvVar('OPENAI_API_KEY')) || '';
+                        return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` };
+                    })();
+                    const resp = await fetch('https://api.openai.com/v1/chat/completions', { method:'POST', headers, body: JSON.stringify({ model: 'gpt-4o-mini', messages, temperature: 0.6 }) });
+                    if (!resp.ok) { const err = await resp.text(); throw new Error(err); }
+                    const data = await resp.json();
+                    const content = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+                    alert('Encerramento simulado:\n\n' + content.trim());
+                } catch (e) { console.error(e); }
+            });
+
+            // Debug: testar se EmailJS está carregado e se envs existem
+            dbgTestEmail.addEventListener('click', () => {
+                const loaded = !!window.emailjs;
+                const serviceId = (window.__getEnvVar && window.__getEnvVar('EMAILJS_SERVICE_ID')) || '';
+                const templateId = (window.__getEnvVar && window.__getEnvVar('EMAILJS_TEMPLATE_ID')) || '';
+                const publicKey = (window.__getEnvVar && window.__getEnvVar('EMAILJS_PUBLIC_KEY')) || '';
+                let msg = loaded ? 'EmailJS SDK: carregado\n' : 'EmailJS SDK: NÃO carregado\n';
+                msg += `SERVICE_ID: ${serviceId ? 'ok' : 'faltando'}\n`;
+                msg += `TEMPLATE_ID: ${templateId ? 'ok' : 'faltando'}\n`;
+                msg += `PUBLIC_KEY: ${publicKey ? 'ok' : 'faltando'}\n`;
+                try {
+                    if (loaded && publicKey) {
+                        window.emailjs.init(publicKey);
+                        msg += 'Init: sucesso';
+                    }
+                } catch (e) {
+                    msg += `Init: falhou (${e && e.message})`;
+                }
+                alert(msg);
+            });
+
+            // Dev switch: mostra/oculta elementos com data-dev-only
+            const applyDevVisibility = () => {
+                const on = localStorage.getItem('dev_mode') === '1';
+                devSwitch.textContent = on ? 'Dev: ON' : 'Dev: OFF';
+                document.querySelectorAll('[data-dev-only]').forEach(el => {
+                    el.style.display = on ? '' : 'none';
+                });
+            };
+            devSwitch.addEventListener('click', () => {
+                const on = localStorage.getItem('dev_mode') === '1';
+                localStorage.setItem('dev_mode', on ? '0' : '1');
+                applyDevVisibility();
+            });
+            applyDevVisibility();
         });
     </script>
 </body>

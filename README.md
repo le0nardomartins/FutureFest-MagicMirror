@@ -1,6 +1,6 @@
 # Uma Jornada no Nosso Tempo
 
-Um jogo narrativo interativo onde suas escolhas determinam o rumo da história. Desenvolvido com Electron para proporcionar uma experiência imersiva de tomada de decisões.
+Um jogo narrativo interativo onde suas escolhas determinam o rumo da história. Execute o jogo pela vercel e coloque as variáveis no embiente interno da vercel para funcionar.
 
 ## 📋 Pré-requisitos
 

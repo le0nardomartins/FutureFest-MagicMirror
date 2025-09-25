@@ -3,6 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <title>Uma Jornada no Nosso Tempo</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="./assets/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="./assets/favicon/favicon-16x16.png">
+    <link rel="manifest" href="./assets/favicon/site.webmanifest">
+    <link rel="icon" href="./assets/favicon/favicon.ico">
     <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -11,7 +16,7 @@
     <div class="cursor-trail"></div>
     
     <!-- Elemento de áudio para a música tema -->
-    <audio id="background-music" loop preload="auto">
+    <audio id="background-music" loop preload="auto" autoplay playsinline>
         <source src="./assets/audio/main-theme.wav" type="audio/wav">
         Seu navegador não suporta o elemento de áudio.
     </audio>
@@ -50,25 +55,52 @@
         // Reproduzir música de fundo ao carregar a página
         document.addEventListener('DOMContentLoaded', function() {
             const backgroundMusic = document.getElementById('background-music');
+            try { backgroundMusic.volume = 0.7; backgroundMusic.setAttribute('playsinline',''); } catch {}
             
             // Tentativa de reprodução automática (pode ser bloqueada pelos navegadores)
             backgroundMusic.play().catch(function(error) {
                 console.log("Reprodução automática bloqueada pelo navegador:", error);
-                
-                // Adiciona um botão para reprodução manual se necessário
-                if (!document.getElementById('play-music-btn')) {
-                    const musicBtn = document.createElement('button');
-                    musicBtn.id = 'play-music-btn';
-                    musicBtn.innerHTML = '🔊';
-                    musicBtn.title = 'Tocar música de fundo';
-                    musicBtn.className = 'music-control';
-                    musicBtn.onclick = function() {
-                        backgroundMusic.play();
-                        this.style.display = 'none';
-                    };
-                    document.body.appendChild(musicBtn);
-                }
+                // Ativa som na primeira interação do usuário
+                const tryEnable = () => {
+                    backgroundMusic.play().then(() => {
+                        window.removeEventListener('pointerdown', tryEnable);
+                        window.removeEventListener('keydown', tryEnable);
+                        window.removeEventListener('touchstart', tryEnable);
+                    }).catch(() => {});
+                };
+                window.addEventListener('pointerdown', tryEnable, { once: true });
+                window.addEventListener('keydown', tryEnable, { once: true });
+                window.addEventListener('touchstart', tryEnable, { once: true });
             });
+
+            // Botão de tela cheia no topo direito
+            if (!document.getElementById('fullscreen-btn')) {
+                const fsBtn = document.createElement('button');
+                fsBtn.id = 'fullscreen-btn';
+                fsBtn.title = 'Tela cheia';
+                fsBtn.className = 'music-control';
+                fsBtn.textContent = '⛶';
+                document.body.appendChild(fsBtn);
+
+                const rootEl = document.documentElement;
+                const isFS = () => !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+                const reqFS = async () => {
+                    try { if (rootEl.requestFullscreen) return await rootEl.requestFullscreen(); } catch {}
+                    try { if (rootEl.webkitRequestFullscreen) return await rootEl.webkitRequestFullscreen(); } catch {}
+                    try { if (rootEl.msRequestFullscreen) return await rootEl.msRequestFullscreen(); } catch {}
+                };
+                const exitFS = async () => {
+                    try { if (document.exitFullscreen) return await document.exitFullscreen(); } catch {}
+                    try { if (document.webkitExitFullscreen) return await document.webkitExitFullscreen(); } catch {}
+                    try { if (document.msExitFullscreen) return await document.msExitFullscreen(); } catch {}
+                };
+                const refreshBtn = () => { fsBtn.textContent = isFS() ? '❐' : '⛶'; fsBtn.title = isFS() ? 'Sair da tela cheia' : 'Tela cheia'; };
+                document.addEventListener('fullscreenchange', refreshBtn);
+                document.addEventListener('webkitfullscreenchange', refreshBtn);
+                document.addEventListener('msfullscreenchange', refreshBtn);
+                fsBtn.addEventListener('click', async () => { if (isFS()) await exitFS(); else await reqFS(); refreshBtn(); });
+                refreshBtn();
+            }
         });
         
         // Função para parar a música e navegar para a próxima página

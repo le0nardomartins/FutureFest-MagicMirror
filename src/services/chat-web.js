@@ -191,6 +191,123 @@ const sanitizeForSpeech = (text) => {
   return t.trim();
 };
 
+// ------------------------------
+// Climas: leitura do CSV + classificação auxiliar
+// ------------------------------
+let __climasCache = null;
+
+const __parseClimasCSV = (csvText) => {
+  try {
+    const lines = String(csvText || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return [];
+    // Assume primeira coluna chamada "climas" ou única coluna
+    const header = lines.shift();
+    const isSingleColumn = !header.includes(',');
+    if (isSingleColumn) {
+      return lines.map(l => l.trim()).filter(Boolean);
+    }
+    const headers = header.split(',').map(h => h.trim().toLowerCase());
+    const idx = headers.indexOf('climas');
+    if (idx === -1) return [];
+    const out = [];
+    for (const line of lines) {
+      const cols = line.split(',');
+      if (cols[idx] && cols[idx].trim()) out.push(cols[idx].trim());
+    }
+    return out;
+  } catch { return []; }
+};
+
+const loadClimasList = async () => {
+  if (Array.isArray(__climasCache) && __climasCache.length) return __climasCache;
+  const candidates = ['/climas.csv', '../climas.csv', '../../climas.csv'];
+  for (const url of candidates) {
+    try {
+      const resp = await fetch(url, { method: 'GET' });
+      if (!resp.ok) continue;
+      const text = await resp.text();
+      const arr = __parseClimasCSV(text).map(x => x.trim()).filter(Boolean);
+      if (arr.length) {
+        __climasCache = Array.from(new Set(arr));
+        console.log('[climas] lista carregada de', url, '→', __climasCache);
+        return __climasCache;
+      }
+    } catch {}
+  }
+  // Fallback seguro
+  __climasCache = ['calor', 'vento', 'chuva'];
+  console.warn('[climas] usando fallback padrão:', __climasCache);
+  return __climasCache;
+};
+
+const __waitForOpenAIKey = async (timeoutMs = 5000) => {
+  if (getOPENAI_API_KEY()) return true;
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs && !getOPENAI_API_KEY()) {
+    await new Promise(r => setTimeout(r, 100));
+  }
+  return !!getOPENAI_API_KEY();
+};
+
+const classifyClimateFromNarration = async (narrationText) => {
+  try {
+    const options = await loadClimasList();
+    if (!options.length) return null;
+    await __waitForOpenAIKey(5000);
+    const listStr = options.join(', ');
+    const messages = [
+      { role: 'system', content: [
+        'Você é um classificador de clima.',
+        'Responda COM APENAS UMA PALAVRA, exatamente igual a UMA das opções fornecidas.',
+        'Não explique, não use pontuação, não use maiúsculas extras, não crie novas palavras.'
+      ].join('\n') },
+      { role: 'user', content: [
+        `Opções válidas (responda exatamente uma delas): ${listStr}.`,
+        'Contexto do mundo (texto):',
+        narrationText || ''
+      ].join('\n') }
+    ];
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: buildJSONHeaders(),
+      body: JSON.stringify({ model: 'gpt-4o-mini', messages, temperature: 0 })
+    });
+    if (!resp.ok) {
+      const err = await resp.text();
+      console.error('[climas] erro ao classificar clima:', resp.status, err);
+      return null;
+    }
+    const data = await resp.json();
+    const raw = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+    let answer = sanitizeForSpeech(raw).split(/\s+/).map(s => s.trim()).filter(Boolean)[0] || '';
+    // Normaliza e valida
+    const normalized = answer.normalize('NFC').toLowerCase();
+    const validSet = new Set(options.map(o => o.normalize('NFC').toLowerCase()));
+    const chosen = validSet.has(normalized) ? answer : options[0];
+    console.log('[climas] classificado →', chosen, '| bruto:', raw);
+    return chosen;
+  } catch (e) {
+    console.error('[climas] exceção na classificação:', e);
+    return null;
+  }
+};
+
+const postClimateToHardware = async (clima) => {
+  if (!clima) return;
+  try {
+    const url = 'https://ic-viagemnotempo-server-production.up.railway.app/api/hardware';
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ climas: String(clima) })
+    });
+    const text = await resp.text();
+    console.log('[climas] POST /api/hardware →', resp.status, text);
+  } catch (e) {
+    console.error('[climas] falha no POST do clima:', e.message || e);
+  }
+};
+
 // Conversation engine with 15 stages, history, and stage-specific instructions
 const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
   const buildHeaders = () => ({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${getOPENAI_API_KEY()}` });
@@ -206,11 +323,11 @@ const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
     '- Output MUST be PLAIN TEXT only (no JSON, no Markdown, no triple backticks).',
     '- Decision axis is STRICTLY ENVIRONMENTAL and GLOBAL (for all humanity). Never target local groups or isolated cases. Choices must reflect what the majority of humanity would choose.',
     '- If the environment is already irreversibly degraded according to the context, broaden the decision to global survival/remediation (still global, affecting all humanity).',
-    '- CRITICAL: Each stage must present NEW environmental challenges. When one problem is solved, another must emerge. From stage 10 onwards, problems become more intense and require more difficult, specific solutions.',
+    '- CRITICAL: Each stage must present NEW environmental challenges. When one problem is solved, another must emerge. From stages 5..7, problems become more intense and require more difficult, specific solutions.',
     '- PAST MISTAKES: If previous decisions created problems, these must resurface and compound with new challenges. The AI must narrate how past errors are now causing consequences.',
-    '- Stages 2..15: First write a 2-3 sentence NARRATION covering climate, society, culture, economy, technology and biodiversity (environmental-centric, showing consequences across aspects). The narration MUST explicitly evaluate the PREVIOUS USER ANSWER as if it were adopted by the majority of humanity: state if it worked or not and briefly explain why. Then introduce the NEW environmental challenge that emerged. Then ask EXACTLY ONE objective, GLOBAL, environmental QUESTION (no extra context).',
+    '- Stages 2..8: First write a 2-3 sentence NARRATION covering climate, society, culture, economy, technology and biodiversity (environmental-centric, showing consequences across aspects). The narration MUST explicitly evaluate the PREVIOUS USER ANSWER as if it were adopted by the majority of humanity: state if it worked or not and briefly explain why. Then introduce the NEW environmental challenge that emerged. Then ask EXACTLY ONE objective, GLOBAL, environmental QUESTION (no extra context).',
     '- Stage 1: DO NOT narrate; ask ONLY ONE objective, GLOBAL, environmental question based on the initial context provided.',
-    '- Pre-stage (context setup): write ONLY the initial world narration in 2-4 sentences (plain text).',
+    '- Pre-stage (context setup): write ONLY the initial world narration in NO MORE THAN 2 short sentences (plain text).',
     '- Never use lists, bullets, or code blocks; only sentences.',
     '- In the question, always start with "O que você acha..." ou "na sua opinião..."',
     '- Always end the question with the prefix "O que você vai fazer, Viajante?"'
@@ -227,7 +344,7 @@ const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
         '- Formato: texto puro de uma única frase com ponto de interrogação.'
       ].join('\n');
     }
-    if (stageNumber >= 10 && stageNumber < 15) {
+    if (stageNumber >= 5 && stageNumber < 8) {
       return [
         `Estágio ${stageNumber} (preparando encerramento - PROBLEMAS INTENSOS):`,
         '- Considere todas as respostas anteriores e avance a narrativa, mostrando efeitos AMBIENTAIS cumulativos e seus impactos globais em sociedade/cultura/economia/tecnologia/biodiversidade.',
@@ -237,14 +354,18 @@ const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
         '- Proponha UMA nova situação complexa e faça UMA pergunta AMBIENTAL e GLOBAL (escolha da maioria). Se o ambiente colapsou, foque em sobrevivência/remediação global.'
       ].join('\n');
     }
-    if (stageNumber >= 15) {
+    if (stageNumber >= 8) {
       return [
-        'Estágio 15 (encerramento):',
+        'Estágio 8 (encerramento):',
         '- Conclua a simulação, descrevendo como ficou o mundo final do usuário em todos os aspectos (clima, sociedade, cultura, economia, tecnologia, biodiversidade, qualidade de vida), com ênfase nos desdobramentos AMBIENTAIS e seus impactos globais.',
         '- Diga explicitamente se ainda há vida e como ela se mantém (ou não).',
         '- Neste estágio, retorne pergunta = null.',
         '- NÃO faça perguntas aqui. Apenas contextualize de forma vívida aspectos como clima, sociedade, cultura, economia, tecnologia e biodiversidade.',
-        '- Deixe uma pergunta em aberto ou algo que faça ele refletir, como uma frase ou uma reflexão para ele pensar sobre suas decisões e o estado final do mundo.'
+        '- O texto DEVE começar exatamente com: "Você fez suas escolhas viajante, e então chegamos ao fim..."',
+        '- Use apenas ponto final e vírgulas (sem travessões, ponto e vírgula ou outros sinais).',
+        '- Mantenha entre 3 e 4 frases curtas, em português do Brasil, com acentuação correta.',
+        '- O tom deve ser poético e, na última frase, deixe uma reflexão sutil e evocativa sem pergunta explícita (sem ponto de interrogação).',
+        '- Se o desfecho for ruim (colapso ambiental/social ou sobrevivência precária), inclua explicitamente que o viajante seguiu os mesmos caminhos dos antepassados, repetiu suas escolhas e se isentou da culpa, antes de descrever o estado final do mundo.'
       ].join('\n');
     }
     return [
@@ -271,7 +392,7 @@ const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
       { role: 'system', content: baseSystemPrompt },
       { role: 'user', content: [
         'Pré-estágio 0 (contextualização inicial do mundo):',
-        '- Construa um contexto inicial detalhado do mundo em 2-4 frases.',
+        '- Construa um contexto inicial do mundo em no máximo 2 frases curtas.',
         '- NÃO faça perguntas aqui. Apenas contextualize de forma vívida aspectos como clima, sociedade, cultura, economia, tecnologia e biodiversidade.',
         '- Escreva apenas a narração em TEXTO PURO.'
       ].join('\n') }
@@ -310,7 +431,7 @@ const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
     const context = {
       email: email || null,
       estagio_atual: stageNumber,
-      total_estagios: 15,
+      total_estagios: 8,
       estado_mundo_atual: priorState || {},
       historico: history,
       contexto_mundo_inicial: introContext || ''
@@ -335,7 +456,7 @@ const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
   };
 
   const getNext = async ({ userText, priorState }) => {
-    const stageNumber = currentStage + 1; // 1..15
+    const stageNumber = currentStage + 1; // 1..8
     const messages = buildMessages({ stageNumber, userAnswer: userText || '', priorState });
     console.log('[chat] getNext → estágio', stageNumber, '| userText len:', (userText || '').length, '| priorState?', !!priorState);
 
@@ -369,12 +490,13 @@ const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
       const question = sentences.reverse().find(s => s.trim().endsWith('?')) || '';
       sentences.reverse();
       const narration = sentences.filter(s => s !== question).slice(0, 3).join(' ').trim();
-      parsed = { pergunta: question || (stageNumber >= 15 ? null : 'Qual é sua decisão?'), narracao: narration || '', estado_mundo: priorState || {} };
+      // No estágio 8 (encerramento), não deve haver pergunta
+      parsed = { pergunta: (stageNumber >= 8 ? null : (question || 'Qual é sua decisão?')), narracao: narration || '', estado_mundo: priorState || {} };
     }
     console.log('[chat] getNext ← estágio', stageNumber, '| narração presente?', !!(parsed && parsed.narracao), '| pergunta presente?', !!(parsed && parsed.pergunta));
     const entry = {
       stage: stageNumber,
-      question: stageNumber >= 15 ? null : parsed.pergunta,
+      question: stageNumber >= 8 ? null : parsed.pergunta,
       narration: parsed.narracao,
       worldState: parsed.estado_mundo,
       userAnswer: (userText || '').trim() || null
@@ -382,7 +504,7 @@ const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
     worldStages.push(entry);
     currentStage++;
     onWorldUpdate && onWorldUpdate({ currentStage, entry, worldStages: [...worldStages] });
-    const finished = currentStage >= 15;
+    const finished = currentStage >= 8;
     if (finished) { onFinish && onFinish({ stages: [...worldStages], email: email || '' }); }
     return { finished, entry };
   };
@@ -431,6 +553,13 @@ const createAIEntityChat = ({ onTranscript, onAIQuestion, onAINarration, onWorld
       } catch (e) {
         console.error('[chat-web] Erro na síntese de voz da narração:', e.message);
       }
+      // Classificação de clima para cada novo contexto (exceto o inicial, que não cai aqui)
+      try {
+        const clima = await classifyClimateFromNarration(entry.narration);
+        await postClimateToHardware(clima);
+      } catch (e) {
+        console.error('[climas] erro durante classificação+POST:', e.message || e);
+      }
     }
 
     // 2) Perguntar (se houver)
@@ -449,7 +578,7 @@ const createAIEntityChat = ({ onTranscript, onAIQuestion, onAINarration, onWorld
     if ((entry.question || '').trim()) {
         try {
           onDebug && onDebug.onHearStart && onDebug.onHearStart();
-          const blob = await recordUserOnce({ maxMs: 10000, silenceMs: 1500 });
+          const blob = await recordUserOnce({ maxMs: 15000, silenceMs: 2200 });
           let txt = await transcribeWithOpenAI(blob, { language: 'pt' });
           // Se a transcrição vier apenas entre parênteses, tratar como silêncio
           if ((txt || '').trim().match(/^\s*\([\s\S]*\)\s*$/)) {
@@ -501,7 +630,7 @@ const createAIEntityChat = ({ onTranscript, onAIQuestion, onAINarration, onWorld
 // Resumo textual da linha do tempo via Chat
 const summarizeTimeline = async (worldStages) => {
   const messages = [
-    { role: 'system', content: 'Você resume linhas do tempo narrativas. Retorne um texto conciso, com 6-10 marcos principais, em ordem cronológica, descrevendo os eventos mais marcantes que ocorreram no mundo do usuário ao longo de 15 estágios. Use frases curtas separadas por ponto e vírgula.' },
+    { role: 'system', content: 'Você resume linhas do tempo narrativas. Retorne um texto conciso, com 4-6 marcos principais, em ordem cronológica, descrevendo os eventos mais marcantes que ocorreram no mundo do usuário ao longo de 8 estágios. Use frases curtas separadas por ponto e vírgula.' },
     { role: 'user', content: `Eis a trajetória completa (estágios com pergunta, resposta do usuário, narração e estado): ${JSON.stringify(worldStages)}` }
   ];
   try { console.log('[chat][timeline] REQUEST messages →', JSON.stringify(messages, null, 2)); } catch {}
