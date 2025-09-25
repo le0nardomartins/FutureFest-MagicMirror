@@ -300,11 +300,23 @@
                 try {
                     const params = new URLSearchParams(window.location.search);
                     const email = 'leonardomartins140124@gmail.com';
-                    const narration = dbgInput.value || 'Mundo abandonado por desastres climáticos; cidades vazias, migrações em massa e ecossistemas colapsados.';
+                    const narration = dbgInput.value || 'World abandoned by climate disasters, empty cities, mass migrations, ecosystems collapsed.';
                     const mockStages = [
                         { narration },
-                        { narration: 'n/a' },{ narration: 'n/a' },{ narration: 'n/a' },{ narration: 'n/a' },{ narration: 'n/a' },{ narration: 'n/a' },{ narration: 'n/a' }
+                        { narration: 'Rising temperatures and water scarcity' },
+                        { narration: 'Energy transition and resistance' },
+                        { narration: 'Wildfires and coastal floods' },
+                        { narration: 'Carbon capture and reforestation efforts' },
+                        { narration: 'Geopolitical tensions and migrations' },
+                        { narration: 'Partial recovery of biomes' },
+                        { narration: narration }
                     ];
+                    // Exibe o prompt usado para você avaliar
+                    const last = mockStages[mockStages.length - 1];
+                    const promptPreview = buildFinalPrompt({ finalDescription: last.narration });
+                    console.log('[debug] final prompt ->\n' + promptPreview);
+                    alert('Prompt enviado ao DALL·E (resumo):\n\n' + promptPreview.slice(0, 1000));
+
                     const dataUrl = await generateFinalWorldImage(mockStages);
                     if (email) {
                         const { url } = await renderKenBurnsVideoFromImage(dataUrl, { durationMs: 3000, fps: 30 });

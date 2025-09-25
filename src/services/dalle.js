@@ -50,14 +50,42 @@ const urlToDataUrl = async (url) => {
   });
 };
 
+const __truncate = (text, max = 700) => String(text || '').slice(0, max);
+
+const buildTimelinePrompt = ({ summary, finalDescription }) => {
+  const positive = 'cinematic photorealistic timeline, left-to-right progression, clear separators, global environmental themes, volumetric lighting, hdr, sharp focus';
+  const keywords = 'climate crisis, renewable energy, migration, biodiversity loss, carbon capture, drought, flood, wildfire, sea level rise, reforestation';
+  const negative = 'text, captions, watermarks, logos, charts, ui, low-res, blurry, distorted, oversaturated, nsfw, close-up faces';
+  return [
+    `Positive: ${positive}.`,
+    `Keywords: ${keywords}.`,
+    `Negative: ${negative}.`,
+    'Context:', __truncate(summary, 600),
+    'Final:', __truncate(finalDescription || '', 240)
+  ].join('\n');
+};
+
+// Prompt compacto para uma cena única do mundo final (sem timeline)
+const buildFinalPrompt = ({ finalDescription }) => {
+  const positive = 'cinematic photorealistic environmental scene, global scale, dramatic natural light, volumetric lighting, hdr, ultra-detailed, sharp focus';
+  const keywords = 'climate, society, technology, biodiversity, oceans, forests, cities, resilience';
+  const negative = 'text, captions, watermarks, logos, charts, ui, low-res, blurry, distorted, oversaturated, nsfw, close-up faces';
+  return [
+    `Positive: ${positive}.`,
+    `Keywords: ${keywords}.`,
+    `Negative: ${negative}.`,
+    'Final world summary:', __truncate(finalDescription || '', 700)
+  ].join('\n');
+};
+
 const generateFinalWorldImage = async (worldStages) => {
   try {
     const key = (getOPENAI_API_KEY() || '').trim();
     if (!key) throw new Error('OPENAI_API_KEY ausente');
 
     const last = worldStages[worldStages.length - 1] || {};
-    const summary = (worldStages || []).map((s, i) => `Estágio ${i+1}: ${s.narration || s.worldNarration || ''}`).join('\n');
-    const prompt = `Crie uma imagem fotorrealista e cinematográfica do mundo final do usuário após 8 estágios de transformação. Contexto resumido:\n${summary}\n\nDescrição final do mundo: ${last.worldState ? JSON.stringify(last.worldState) : (last.worldNarration || last.narration || '')}.\n\nEstilo: épico, tons naturais, alto detalhe, volumetric lighting, ultra-detalhado.`;
+    const finalDescription = last.worldState ? JSON.stringify(last.worldState) : (last.worldNarration || last.narration || '');
+    const prompt = buildFinalPrompt({ finalDescription });
 
     const response = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
@@ -65,7 +93,7 @@ const generateFinalWorldImage = async (worldStages) => {
       body: JSON.stringify({
         model: 'gpt-image-1',
         prompt,
-        size: '1024x1024',
+        size: '1536x1024',
         quality: 'high'
       })
     });
@@ -93,23 +121,15 @@ const generateTimelineImage = async (timelineSummary) => {
     const key = (getOPENAI_API_KEY() || '').trim();
     if (!key) throw new Error('OPENAI_API_KEY ausente');
 
-    const basePrompt = [
-      'Crie uma única imagem 1920x1080 (paisagem) que represente, em uma linha do tempo horizontal,',
-      'os eventos mais marcantes da trajetória do mundo do usuário em 8 estágios.',
-      'Use um estilo cinematográfico, com boa legibilidade visual, separadores claros entre marcos,',
-      'elementos ambientais/sociais/tecnológicos, e cores que ajudem a leitura cronológica da esquerda para a direita.',
-      'Não inclua textos longos; prefira ícones/símbolos/imagens que representem cada marco.',
-      'Resumo para basear a linha do tempo:\n',
-      timelineSummary
-    ].join(' ');
+    const prompt = buildTimelinePrompt({ summary: String(timelineSummary || '').trim(), finalDescription: '' });
 
     const response = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
       headers: await buildOpenAIHeaders(),
       body: JSON.stringify({
         model: 'gpt-image-1',
-        prompt: basePrompt,
-        size: '1920x1080',
+        prompt,
+        size: '1536x1024',
         quality: 'high'
       })
     });
@@ -188,3 +208,5 @@ const renderKenBurnsVideoFromImage = async (imageSrc, { durationMs = 10000, fps 
 window.generateFinalWorldImage = generateFinalWorldImage;
 window.generateTimelineImage = generateTimelineImage;
 window.renderKenBurnsVideoFromImage = renderKenBurnsVideoFromImage;
+window.buildFinalPrompt = buildFinalPrompt;
+window.buildTimelinePrompt = buildTimelinePrompt;
