@@ -50,6 +50,7 @@
             position: absolute;
             bottom: -100%;
             animation: scrollCredits 30s linear forwards;
+            animation-delay: 3s;
             text-align: center;
             padding: 20px;
         }
@@ -62,12 +63,9 @@
             10% {
                 opacity: 1;
             }
-            90% {
-                opacity: 1;
-            }
             100% {
                 bottom: 100%;
-                opacity: 0;
+                opacity: 1;
             }
         }
 
@@ -147,6 +145,7 @@
 
     <div id="credits-container">
         <div id="sound-wave-container"></div>
+        <div id="fade-home" style="position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity 1.2s ease;"></div>
         
         <div id="credits-content">
             <div class="credit-section">
@@ -169,6 +168,17 @@
     <script src="../sound-wave-animation.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // Requisita fullscreen ao entrar
+            (async function(){
+                try {
+                    const el = document.documentElement;
+                    if (!document.fullscreenElement) {
+                        if (el.requestFullscreen) await el.requestFullscreen();
+                        else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+                        else if (el.msRequestFullscreen) await el.msRequestFullscreen();
+                    }
+                } catch {}
+            })();
             // Inicializar animação de onda sonora
             const soundWave = new SoundWaveAnimation('sound-wave-container');
             
@@ -183,11 +193,15 @@
             const fade = document.getElementById('fade-overlay');
 
             const goHome = () => {
-                fade.style.opacity = '1';
+                const overlay = document.getElementById('fade-home');
+                if (overlay) overlay.style.opacity = '1';
                 setTimeout(() => { window.location.href = '../index.html'; }, 1200);
             };
             returnButton.addEventListener('click', goHome);
             skipButton.addEventListener('click', goHome);
+
+            // Redireciona automaticamente após 20s exatos
+            setTimeout(goHome, 20000);
         });
     </script>
 </body>

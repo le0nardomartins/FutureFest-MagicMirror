@@ -321,10 +321,12 @@ const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
     'Always reply in Brazilian Portuguese.',
     'Hard formatting rules (MANDATORY):',
     '- Output MUST be PLAIN TEXT only (no JSON, no Markdown, no triple backticks).',
+    '- Clarity: Keep sentences clear and concise; avoid long enumerations and unnecessary repetition.',
     '- Decision axis is STRICTLY ENVIRONMENTAL and GLOBAL (for all humanity). Never target local groups or isolated cases. Choices must reflect what the majority of humanity would choose.',
     '- If the environment is already irreversibly degraded according to the context, broaden the decision to global survival/remediation (still global, affecting all humanity).',
     '- CRITICAL: Each stage must present NEW environmental challenges. When one problem is solved, another must emerge. From stages 5..7, problems become more intense and require more difficult, specific solutions.',
     '- PAST MISTAKES: If previous decisions created problems, these must resurface and compound with new challenges. The AI must narrate how past errors are now causing consequences.',
+    '- CLIMATE: In EVERY stage, explicitly mention the current climate conditions (temperature trend, precipitation, extreme events or air quality) in one short clause.',
     '- Stages 2..8: First write a 2-3 sentence NARRATION covering climate, society, culture, economy, technology and biodiversity (environmental-centric, showing consequences across aspects). The narration MUST explicitly evaluate the PREVIOUS USER ANSWER as if it were adopted by the majority of humanity: state if it worked or not and briefly explain why. Then introduce the NEW environmental challenge that emerged. Then ask EXACTLY ONE objective, GLOBAL, environmental QUESTION (no extra context).',
     '- Stage 1: DO NOT narrate; ask ONLY ONE objective, GLOBAL, environmental question based on the initial context provided.',
     '- Pre-stage (context setup): write ONLY the initial world narration in NO MORE THAN 2 short sentences (plain text).',
@@ -340,7 +342,7 @@ const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
         'Estágio 1 (após contextualização prévia):',
         '- Use o "contexto_mundo_inicial" fornecido previamente.',
         '- NÃO narre novamente.',
-        '- Apresente APENAS UMA PERGUNTA objetiva AMBIENTAL e GLOBAL (sem contextualização adicional), refletindo a decisão da maioria da humanidade.',
+        '- Apresente APENAS UMA PERGUNTA objetiva AMBIENTAL e GLOBAL (sem contextualização adicional), refletindo a decisão da maioria da humanidade. Inclua uma breve menção ao clima atual do mundo (ex.: tendência de temperatura/chuvas ou evento extremo predominante) em uma oração curta antes da pergunta.',
         '- Formato: texto puro de uma única frase com ponto de interrogação.'
       ].join('\n');
     }
@@ -357,10 +359,10 @@ const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
     if (stageNumber >= 8) {
       return [
         'Estágio 8 (encerramento):',
-        '- Conclua a simulação, descrevendo como ficou o mundo final do usuário em todos os aspectos (clima, sociedade, cultura, economia, tecnologia, biodiversidade, qualidade de vida), com ênfase nos desdobramentos AMBIENTAIS e seus impactos globais.',
+        '- Conclua a simulação, descrevendo como ficou o mundo final do usuário em todos os aspectos (clima, sociedade, cultura, economia, tecnologia, biodiversidade, qualidade de vida), com ênfase nos desdobramentos AMBIENTAIS e seus impactos globais. Inclua explicitamente o estado climático final (temperatura, chuvas ou extremos predominantes).',
         '- Diga explicitamente se ainda há vida e como ela se mantém (ou não).',
         '- Neste estágio, retorne pergunta = null.',
-        '- NÃO faça perguntas aqui. Apenas contextualize de forma vívida aspectos como clima, sociedade, cultura, economia, tecnologia e biodiversidade.',
+        '- NÃO faça perguntas aqui. Apenas contextualize de forma vívida aspectos como clima, sociedade, cultura, economia, tecnologia e biodiversidade. Use 3 a 4 frases, sem limite de palavras, mantendo fluidez poética.',
         '- O texto DEVE começar exatamente com: "Você fez suas escolhas viajante, e então chegamos ao fim..."',
         '- Use apenas ponto final e vírgulas (sem travessões, ponto e vírgula ou outros sinais).',
         '- Mantenha entre 3 e 4 frases curtas, em português do Brasil, com acentuação correta.',
@@ -371,7 +373,7 @@ const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
     return [
       `Estágio ${stageNumber}:`,
       '- Considere respostas anteriores e o estado do mundo acumulado.',
-      '- Construa uma nova NARRAÇÃO (2-3 frases) cobrindo clima, sociedade, cultura, economia, tecnologia e biodiversidade, sempre a partir do eixo AMBIENTAL e com escopo GLOBAL.',
+      '- Construa uma nova NARRAÇÃO (2-3 frases) cobrindo clima (obrigatório: estado atual e tendência), sociedade, cultura, economia, tecnologia e biodiversidade, sempre a partir do eixo AMBIENTAL e com escopo GLOBAL.',
       '- A narração DEVE iniciar avaliando explicitamente a resposta anterior do usuário como se a maioria da humanidade a tivesse adotado: funcionou ou não? Diga por quê e quais efeitos ambientais ocorreram.',
       '- CRÍTICO: Apresente um NOVO problema ambiental que surgiu. Quando um problema é resolvido, outro deve emergir naturalmente.',
       '- Se erros passados criaram problemas, eles devem ressurgir agora com consequências.',
@@ -524,20 +526,22 @@ const createAIEntityChat = ({ onTranscript, onAIQuestion, onAINarration, onWorld
     console.log('[chat] loop → iniciando próxima iteração. Resposta anterior len:', (window.__lastUserText || '').length);
     const { finished, entry } = await engine.getNext({ userText: window.__lastUserText || '', priorState });
     if (finished) {
+      stopping = true;
+      // Certifica que o encerramento foi FALADO antes de sair
       try {
-        // Após concluir os 15 estágios, gerar linha do tempo textual e imagem 1920x1080
-        const timelineText = await summarizeTimeline(worldStagesRef);
-        const dataUrl = await window.generateTimelineImage(timelineText);
-        await saveUserImageToAssets(dataUrl);
-        // Enviar email, se houver
-        try {
-          if ((email || '').trim()) {
-            await sendUserImageByEmail({ email, imageDataUrl: dataUrl });
-          }
-        } catch (e) { console.error('email send error:', e); }
-      } catch (e) {
-        console.error('post-finish generate timeline error:', e);
-      }
+        const closingText = entry && entry.narration ? String(entry.narration) : '';
+        if (closingText.trim()) {
+          const { url } = await synthesizeWithElevenLabs(closingText);
+          await playAudioUrlAndWait(url);
+          // Frase final informativa sobre o email
+          try {
+            const extra = 'Sua imagem está sendo preparada e será enviada ao seu e-mail em breve. Obrigado por chegar até aqui.';
+            const extraTts = await synthesizeWithElevenLabs(extra);
+            await playAudioUrlAndWait(extraTts.url);
+          } catch {}
+        }
+      } catch (e) { console.error('final TTS error:', e); }
+      try { window.__onFinalized && window.__onFinalized(); } catch {}
       return;
     }
     // salva estágio atual para timeline

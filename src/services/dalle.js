@@ -87,7 +87,7 @@ const generateFinalWorldImage = async (worldStages) => {
     const finalDescription = last.worldState ? JSON.stringify(last.worldState) : (last.worldNarration || last.narration || '');
     const prompt = buildFinalPrompt({ finalDescription });
 
-    const response = await fetch('https://api.openai.com/v1/images/generations', {
+    const response = await fetch('https://api.openai.com/v1/images/edits'.replace('/edits','/generations'), {
       method: 'POST',
       headers: await buildOpenAIHeaders(),
       body: JSON.stringify({
@@ -123,7 +123,7 @@ const generateTimelineImage = async (timelineSummary) => {
 
     const prompt = buildTimelinePrompt({ summary: String(timelineSummary || '').trim(), finalDescription: '' });
 
-    const response = await fetch('https://api.openai.com/v1/images/generations', {
+    const response = await fetch('https://api.openai.com/v1/images/edits'.replace('/edits','/generations'), {
       method: 'POST',
       headers: await buildOpenAIHeaders(),
       body: JSON.stringify({

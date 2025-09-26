@@ -82,8 +82,11 @@
     </style>
 </head>
 <body>
+    <div class="cursor"></div>
+    <div class="cursor-trail"></div>
     <div id="game-container">
         <div id="sound-wave-container"></div>
+        <div id="fade-final" style="position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity 1.2s ease;z-index:9"></div>
         <div class="controls">
             <button id="btn-fullscreen" class="btn">Tela cheia</button>
             <button id="btn-exit" class="btn">Encerrar</button>
@@ -108,8 +111,20 @@
         </div>
     </div>
 
+    <script src="../cursor-effects.js"></script>
     <script src="../sound-wave-animation.js"></script>
     <script>
+        // Requisita fullscreen ao entrar
+        (async function(){
+            try {
+                const el = document.documentElement;
+                if (!document.fullscreenElement) {
+                    if (el.requestFullscreen) await el.requestFullscreen();
+                    else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+                    else if (el.msRequestFullscreen) await el.msRequestFullscreen();
+                }
+            } catch {}
+        })();
         // Teste imediato de disponibilidade das variáveis
         console.log('[ai-entity] Teste imediato:');
     </script>
@@ -163,39 +178,53 @@
             onAIQuestion: (q) => { $q.textContent = q; },
             onAINarration: (n) => { $n.textContent = n; },
             onWorldUpdate: ({ worldStages }) => { lastWorldStages = worldStages; },
-            onFinish: async (worldStages) => {
-                // Gera imagem/vídeo e envia email APENAS se houver email
+            onFinish: async (payload) => {
+                // Sem tela de geração. Apenas narra encerramento e informa sobre email.
                 const params = new URLSearchParams(window.location.search);
                 const emailParam = (params.get('email') || '').trim();
-                if (!emailParam) { return; }
-                $loading.classList.add('show');
-                $progress.textContent = 'Gerando imagem...';
-                try {
-                    const imageDataUrl = await generateFinalWorldImage(worldStages);
-                    $img.src = imageDataUrl;
-                    $progress.textContent = 'Gerando vídeo...';
-                    const { url } = await renderKenBurnsVideoFromImage(imageDataUrl, { durationMs: 10000, fps: 30 });
-                    $video.src = url;
-                    $results.style.display = 'block';
-                    $progress.textContent = 'Concluído!';
-                    $btnFinish.style.display = 'inline-block';
-                    try {
-                        if (window.emailjsSendImage) {
-                            await window.emailjsSendImage({ to: emailParam, imageDataUrl });
-                        }
-                    } catch (e) { console.error('email send error:', e); }
-                } catch (err) {
-                    console.error(err);
-                    $progress.textContent = 'Falha ao gerar imagem/vídeo.';
-                    $btnFinish.style.display = 'inline-block';
+                const stages = (payload && payload.stages) || [];
+                const emailFromEngine = (payload && payload.email) || '';
+                const toEmail = emailParam || emailFromEngine || '';
+                if (toEmail) {
+                    (async () => {
+                        try {
+                            const imageDataUrl = await generateFinalWorldImage(stages);
+                            if (window.emailjsSendImage) {
+                                await window.emailjsSendImage({ to: toEmail, imageDataUrl });
+                            }
+                        } catch (e) { console.error('email send error or image gen:', e); }
+                    })();
                 }
+                // Mensagem final já foi narrada pelo estágio 8. Nada visual aqui.
             },
             onDebug: null
         });
 
-        document.getElementById('btn-exit').addEventListener('click', () => {
-            soundWave.stop();
-            window.location.href = 'presentation-scene.html';
+        // Callback global para quando o chat finalizar completamente
+        window.__onFinalized = () => {
+            // Aguarda 5s e troca apenas uma vez
+            if (window.__finalRedirectScheduled) return;
+            window.__finalRedirectScheduled = true;
+            setTimeout(() => {
+                const fade = document.getElementById('fade-final');
+                if (fade) fade.style.opacity = '1';
+                setTimeout(() => { window.location.href = 'credits-scene.html'; }, 1200);
+            }, 5000);
+        };
+
+        document.getElementById('btn-exit').addEventListener('click', async () => {
+            try {
+                // Força encerramento: sintetiza um encerramento curto e dispara finalize
+                const closing = 'Você fez suas escolhas viajante, e então chegamos ao fim. O mundo encerra este ciclo com clima instável, migrações e bolsões de resiliência. A vida segue onde ainda há cooperação e cuidado, e a natureza pede vigilância e humildade.';
+                try {
+                    const { url } = await synthesizeWithElevenLabs(closing);
+                    await new Promise(r => setTimeout(r, 200));
+                    const audio = new Audio(url); audio.play().catch(()=>{});
+                } catch {}
+                if (window.__onFinalized) window.__onFinalized();
+            } finally {
+                soundWave.stop();
+            }
         });
 
         // Alternância de tela cheia

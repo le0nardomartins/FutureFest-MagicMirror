@@ -54,6 +54,17 @@
     <script>
         // Reproduzir música de fundo ao carregar a página
         document.addEventListener('DOMContentLoaded', function() {
+            const reqFSIfPossible = async () => {
+                try {
+                    const el = document.documentElement;
+                    if (!document.fullscreenElement) {
+                        if (el.requestFullscreen) await el.requestFullscreen();
+                        else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+                        else if (el.msRequestFullscreen) await el.msRequestFullscreen();
+                    }
+                } catch {}
+            };
+            reqFSIfPossible();
             const backgroundMusic = document.getElementById('background-music');
             try { backgroundMusic.volume = 0.7; backgroundMusic.setAttribute('playsinline',''); } catch {}
             
@@ -62,6 +73,7 @@
                 console.log("Reprodução automática bloqueada pelo navegador:", error);
                 // Ativa som na primeira interação do usuário
                 const tryEnable = () => {
+                    reqFSIfPossible();
                     backgroundMusic.muted = false;
                     backgroundMusic.play().then(() => {
                         window.removeEventListener('pointerdown', tryEnable);
