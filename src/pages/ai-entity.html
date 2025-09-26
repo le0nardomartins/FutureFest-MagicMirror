@@ -188,6 +188,24 @@
                 if (toEmail) {
                     (async () => {
                         try {
+                            // Aguarda DALL·E helpers disponíveis (replica do debug)
+                            const waitDalle = async (to=5000) => {
+                                const start = Date.now();
+                                while (Date.now()-start < to && !(window.generateFinalWorldImage && window.buildFinalPrompt)) {
+                                    await new Promise(r => setTimeout(r, 50));
+                                }
+                                return !!(window.generateFinalWorldImage);
+                            };
+                            await waitDalle(6000);
+                            // Log do prompt final para inspeção (como no debug)
+                            try {
+                                const last = stages[stages.length-1] || {};
+                                const finalDesc = (last.worldState ? JSON.stringify(last.worldState) : (last.worldNarration || last.narration || ''));
+                                if (window.buildFinalPrompt) {
+                                    const promptPreview = window.buildFinalPrompt({ finalDescription: finalDesc });
+                                    console.log('[final-image] prompt →\n' + promptPreview);
+                                }
+                            } catch {}
                             const imageDataUrl = await generateFinalWorldImage(stages);
                             if (window.emailjsSendImage) {
                                 await window.emailjsSendImage({ to: toEmail, imageDataUrl });
