@@ -125,12 +125,23 @@
                 }
             } catch {}
         })();
+        // Reentra em fullscreen se sair involuntariamente
+        document.addEventListener('fullscreenchange', async () => {
+            try {
+                if (!document.fullscreenElement && !window.__allowExitFS) {
+                    const el = document.documentElement;
+                    if (el.requestFullscreen) await el.requestFullscreen();
+                    else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+                    else if (el.msRequestFullscreen) await el.msRequestFullscreen();
+                }
+            } catch {}
+        });
         // Teste imediato de disponibilidade das variáveis
         console.log('[ai-entity] Teste imediato:');
     </script>
-    <script src="../services/chat-web.js"></script>
-    <script src="../services/emailjs.js"></script>
     <script src="../services/dalle.js"></script>
+    <script src="../services/emailjs.js"></script>
+    <script src="../services/chat-web.js"></script>
     <script>
         console.log('[ai-entity] Iniciando script...');
         // Gate de readiness: aguarda variáveis essenciais antes de iniciar
@@ -186,31 +197,33 @@
                 const emailFromEngine = (payload && payload.email) || '';
                 const toEmail = emailParam || emailFromEngine || '';
                 if (toEmail) {
-                    (async () => {
+                    // Promessa de envio que pode ser aguardada pelo finalizador
+                    window.__imageSendPromise = (async () => {
                         try {
-                            // Aguarda DALL·E helpers disponíveis (replica do debug)
-                            const waitDalle = async (to=5000) => {
+                            // Aguarda helpers carregarem
+                            const waitReady = async (to=6000) => {
                                 const start = Date.now();
-                                while (Date.now()-start < to && !(window.generateFinalWorldImage && window.buildFinalPrompt)) {
-                                    await new Promise(r => setTimeout(r, 50));
+                                while (Date.now() - start < to && !(window.generateFinalWorldImage && window.buildFinalPrompt)) {
+                                    await new Promise(r=>setTimeout(r,50));
                                 }
                                 return !!(window.generateFinalWorldImage);
                             };
-                            await waitDalle(6000);
-                            // Log do prompt final para inspeção (como no debug)
-                            try {
-                                const last = stages[stages.length-1] || {};
-                                const finalDesc = (last.worldState ? JSON.stringify(last.worldState) : (last.worldNarration || last.narration || ''));
-                                if (window.buildFinalPrompt) {
-                                    const promptPreview = window.buildFinalPrompt({ finalDescription: finalDesc });
-                                    console.log('[final-image] prompt →\n' + promptPreview);
-                                }
-                            } catch {}
-                            const imageDataUrl = await generateFinalWorldImage(stages);
+                            await waitReady(6000);
+                            const last = stages[stages.length-1] || {};
+                            const finalDesc = (last.worldState ? JSON.stringify(last.worldState) : (last.worldNarration || last.narration || ''));
+                            if (window.buildFinalPrompt) {
+                                const promptPreview = window.buildFinalPrompt({ finalDescription: finalDesc });
+                                console.log('[final-image] prompt →\n' + promptPreview);
+                            }
+                            const imageDataUrl = await window.generateFinalWorldImage(stages);
                             if (window.emailjsSendImage) {
                                 await window.emailjsSendImage({ to: toEmail, imageDataUrl });
                             }
-                        } catch (e) { console.error('email send error or image gen:', e); }
+                            return true;
+                        } catch (e) {
+                            console.error('image generation/send failed', e);
+                            return false;
+                        }
                     })();
                 }
                 // Mensagem final já foi narrada pelo estágio 8. Nada visual aqui.

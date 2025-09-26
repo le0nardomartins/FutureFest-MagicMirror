@@ -179,6 +179,16 @@
                     }
                 } catch {}
             })();
+            document.addEventListener('fullscreenchange', async () => {
+                try {
+                    if (!document.fullscreenElement && !window.__allowExitFS) {
+                        const el = document.documentElement;
+                        if (el.requestFullscreen) await el.requestFullscreen();
+                        else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+                        else if (el.msRequestFullscreen) await el.msRequestFullscreen();
+                    }
+                } catch {}
+            });
             // Inicializar animação de onda sonora
             const soundWave = new SoundWaveAnimation('sound-wave-container');
             

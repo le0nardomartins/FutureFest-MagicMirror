@@ -541,7 +541,16 @@ const createAIEntityChat = ({ onTranscript, onAIQuestion, onAINarration, onWorld
           } catch {}
         }
       } catch (e) { console.error('final TTS error:', e); }
-      try { window.__onFinalized && window.__onFinalized(); } catch {}
+      // Aguarda o envio/geração da imagem terminar nesta tela (se houver email)
+      try {
+        let proceed = true;
+        if (window.__imageSendPromise) {
+          try { proceed = await window.__imageSendPromise; }
+          catch { proceed = false; }
+        }
+        if (proceed) { try { window.__onFinalized && window.__onFinalized(); } catch {} }
+        else { console.error('[final] geração/ envio de imagem falhou; não redirecionar automaticamente'); }
+      } catch {}
       return;
     }
     // salva estágio atual para timeline

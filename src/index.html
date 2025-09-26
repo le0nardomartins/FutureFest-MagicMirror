@@ -65,6 +65,7 @@
                 } catch {}
             };
             reqFSIfPossible();
+            document.addEventListener('fullscreenchange', reqFSIfPossible);
             const backgroundMusic = document.getElementById('background-music');
             try { backgroundMusic.volume = 0.7; backgroundMusic.setAttribute('playsinline',''); } catch {}
             

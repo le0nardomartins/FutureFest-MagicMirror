@@ -141,6 +141,16 @@
                 }
             } catch {}
         })();
+        document.addEventListener('fullscreenchange', async () => {
+            try {
+                if (!document.fullscreenElement && !window.__allowExitFS) {
+                    const el = document.documentElement;
+                    if (el.requestFullscreen) await el.requestFullscreen();
+                    else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+                    else if (el.msRequestFullscreen) await el.msRequestFullscreen();
+                }
+            } catch {}
+        });
         // Preenche as meta tags com as variáveis de ambiente da Vercel (igual na ai-entity)
         (async function() {
             const envVars = [
