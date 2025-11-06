@@ -75,7 +75,17 @@ const __uploadToCloudinary = async (dataUrl) => {
 
 window.emailjsSendImage = async ({ to, imageDataUrl }) => {
   try {
-    if (!window.emailjs) throw new Error('EmailJS não carregado');
+    // Aguarda SDK do EmailJS estar disponível (evita corrida de carregamento)
+    const waitForSDK = async (to=6000) => {
+      const start = Date.now();
+      while (Date.now() - start < to) {
+        if (window.emailjs && typeof window.emailjs.init === 'function' && typeof window.emailjs.send === 'function') return true;
+        await new Promise(r => setTimeout(r, 50));
+      }
+      return false;
+    };
+    const sdkReady = await waitForSDK(6000);
+    if (!sdkReady) throw new Error('EmailJS não carregado');
     // Getter global único compartilhado
     window.__getEnvVar = window.__getEnvVar || function(key) {
       if (typeof document !== 'undefined') {
@@ -111,19 +121,24 @@ window.emailjsSendImage = async ({ to, imageDataUrl }) => {
       throw new Error('EMAILJS_PUBLIC_KEY não encontrada. Verifique se a variável de ambiente está configurada na Vercel');
     }
 
+    console.log('[emailjs] init com PUBLIC_KEY (preview):', (publicKey||'').slice(0,6) + '...');
     window.emailjs.init(publicKey);
 
     // Em vez de enviar base64 enorme para o EmailJS, subimos ao Cloudinary e mandamos URL
     // Sobe em tamanho original (ou levemente comprimido apenas se desejado)
+    console.log('[emailjs] subindo imagem para Cloudinary...');
     const imageUrl = await __uploadToCloudinary(imageDataUrl);
+    console.log('[emailjs] upload concluído. URL:', imageUrl);
 
     const targetEmail = (to && String(to).trim()) ? String(to).trim() : 'leonardomartins140124@gmail.com';
+    console.log('[emailjs] enviando email via EmailJS...', { to: targetEmail, serviceId, templateId });
     const result = await window.emailjs.send(serviceId, templateId, {
       to_email: targetEmail,
       to: targetEmail,
       user_email: targetEmail,
       image_url: imageUrl
     });
+    console.log('[emailjs] envio OK:', result);
     return result;
   } catch (e) {
     console.error('emailjsSendImage error:', e);

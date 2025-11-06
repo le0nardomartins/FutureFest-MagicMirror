@@ -1,3 +1,5 @@
+;(function(){
+'use strict';
 // Estrutura para armazenar as cenas do jogo
 const scenes = {
     intro: {
@@ -125,6 +127,9 @@ function playClickSound() {
 // Inicializar animação de ondas sonoras se o container existir
 function initSoundWaveAnimation() {
     if (soundWaveContainer && window.SoundWaveAnimation) {
+        // Evita instanciar duas vezes (se a página já criou um canvas)
+        if (soundWaveInstance) return true;
+        if (soundWaveContainer.querySelector('canvas')) return true;
         soundWaveInstance = new SoundWaveAnimation('sound-wave-container');
         return true;
     }
@@ -277,4 +282,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (startButton) applyButtonSounds(startButton);
     
     console.log('Inicialização completa. Botões com sons:', allButtons.length);
-}); 
+});
+
+})();

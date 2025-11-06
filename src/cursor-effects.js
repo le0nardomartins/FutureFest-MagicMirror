@@ -1,3 +1,5 @@
+(function(){
+'use strict';
 // Elementos do cursor
 const cursor = document.querySelector('.cursor');
 const cursorTrail = document.querySelector('.cursor-trail');
@@ -56,12 +58,16 @@ function createSpark(x, y, velocityX, velocityY) {
 
 // Atualiza a posição do cursor e cria faíscas
 document.addEventListener('mousemove', (e) => {
-    cursor.style.left = e.clientX + 'px';
-    cursor.style.top = e.clientY + 'px';
+    if (cursor) {
+        cursor.style.left = e.clientX + 'px';
+        cursor.style.top = e.clientY + 'px';
+    }
     
     // Posiciona o cursor-trail
-    cursorTrail.style.left = e.clientX + 'px';
-    cursorTrail.style.top = e.clientY + 'px';
+    if (cursorTrail) {
+        cursorTrail.style.left = e.clientX + 'px';
+        cursorTrail.style.top = e.clientY + 'px';
+    }
 
     // Calcula a velocidade do movimento
     const velocityX = e.clientX - lastMouseX;
@@ -93,7 +99,7 @@ document.addEventListener('mousemove', (e) => {
 
 // Efeito de escala ao clicar
 document.addEventListener('mousedown', () => {
-    cursor.style.transform = 'scale(0.8)';
+    if (cursor) cursor.style.transform = 'scale(0.8)';
     // Cria um burst de faíscas ao clicar
     for (let i = 0; i < 15; i++) {
         if (sparks.length < maxSparks) {
@@ -109,11 +115,12 @@ document.addEventListener('mousedown', () => {
 });
 
 document.addEventListener('mouseup', () => {
-    cursor.style.transform = 'scale(1)';
+    if (cursor) cursor.style.transform = 'scale(1)';
 });
 
 // Cria estrelas
 function createStars() {
+    if (!starsContainer) return; // sem container de estrelas nesta página
     const numberOfStars = 100; // Aumentei o número de estrelas
     
     // Não limpa todas as estrelas de uma vez, apenas adiciona novas
@@ -160,6 +167,7 @@ function createStars() {
             animation-duration: ${duration}s;
         `;
         
+        if (!starsContainer) return; // guarda-dupla
         starsContainer.appendChild(star);
         stars.push(star);
     }
@@ -170,34 +178,47 @@ const startButton = document.querySelector('#start-button');
 const buttonText = document.querySelector('.button-text');
 const buttonGlow = document.querySelector('.button-glow');
 
-startButton.addEventListener('mouseenter', () => {
-    // buttonText.style.opacity = '0';
-    buttonGlow.style.width = '150px';
-    buttonGlow.style.height = '150px';
-    buttonGlow.style.opacity = '0.6';
-    
-    // Aumenta o tamanho do cursor ao passar sobre o botão
-    cursor.style.transform = 'scale(1.5)';
-    // Removendo a expansão do cursor-trail
-    cursorTrail.style.width = '0';
-    cursorTrail.style.height = '0';
-});
+if (startButton) {
+    startButton.addEventListener('mouseenter', () => {
+        // if (buttonText) buttonText.style.opacity = '0';
+        if (buttonGlow) {
+            buttonGlow.style.width = '150px';
+            buttonGlow.style.height = '150px';
+            buttonGlow.style.opacity = '0.6';
+        }
+        
+        // Aumenta o tamanho do cursor ao passar sobre o botão
+        if (cursor) cursor.style.transform = 'scale(1.5)';
+        // Removendo a expansão do cursor-trail
+        if (cursorTrail) {
+            cursorTrail.style.width = '0';
+            cursorTrail.style.height = '0';
+        }
+    });
 
-startButton.addEventListener('mouseleave', () => {
-    // buttonText.style.opacity = '1';
-    buttonGlow.style.width = '0';
-    buttonGlow.style.height = '0';
-    buttonGlow.style.opacity = '0';
-    
-    // Retorna o cursor ao tamanho normal
-    cursor.style.transform = 'scale(1)';
-    cursorTrail.style.width = '0';
-    cursorTrail.style.height = '0';
-});
+    startButton.addEventListener('mouseleave', () => {
+        // if (buttonText) buttonText.style.opacity = '1';
+        if (buttonGlow) {
+            buttonGlow.style.width = '0';
+            buttonGlow.style.height = '0';
+            buttonGlow.style.opacity = '0';
+        }
+        
+        // Retorna o cursor ao tamanho normal
+        if (cursor) cursor.style.transform = 'scale(1)';
+        if (cursorTrail) {
+            cursorTrail.style.width = '0';
+            cursorTrail.style.height = '0';
+        }
+    });
+}
 
-// Inicializa as estrelas
-createStars();
+// Inicializa as estrelas (somente se o container existir)
+if (starsContainer) {
+    createStars();
+    // Recria algumas estrelas periodicamente para manter o efeito dinâmico
+    // Intervalo mais curto para uma transição mais suave
+    setInterval(createStars, 3000);
+}
 
-// Recria algumas estrelas periodicamente para manter o efeito dinâmico
-// Intervalo mais curto para uma transição mais suave
-setInterval(createStars, 3000); 
+})();

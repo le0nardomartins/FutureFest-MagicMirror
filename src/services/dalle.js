@@ -17,15 +17,22 @@ window.__getOpenAIKey = window.__getOpenAIKey || function() {
 };
 const getOPENAI_API_KEY = window.__getOpenAIKey;
 
-// Verifica se a chave está presente
+// Log mais brando e tardio para aguardar /api/env preencher meta tags
 if (!getOPENAI_API_KEY()) {
-  console.error('[dalle] ❌ OPENAI_API_KEY não encontrada');
-  console.error('[dalle] Verifique se a variável de ambiente OPENAI_API_KEY está configurada na Vercel');
+  setTimeout(() => {
+    const preview = (getOPENAI_API_KEY() || '').trim();
+    if (!preview) {
+      console.warn('[dalle] OPENAI_API_KEY ainda não disponível (aguardando /api/env)');
+    } else {
+      console.log('[dalle] OPENAI_API_KEY carregada (preview):', preview.slice(0, 8) + '...');
+    }
+  }, 2000);
+} else {
+  try {
+    const preview = (getOPENAI_API_KEY() || '').trim();
+    console.log('[dalle] OPENAI_API_KEY carregada (preview):', preview.slice(0, 8) + '...');
+  } catch {}
 }
-try {
-  const preview = (getOPENAI_API_KEY() || '').trim();
-  console.log('[dalle] OPENAI_API_KEY presente:', preview ? 'sim' : 'não', '| preview:', preview ? (preview.slice(0, 20) + '...') : 'N/A');
-} catch {}
 
 const buildOpenAIHeaders = async () => {
   // Aguarda env
@@ -84,7 +91,13 @@ const generateFinalWorldImage = async (worldStages) => {
     if (!key) throw new Error('OPENAI_API_KEY ausente');
 
     const last = worldStages[worldStages.length - 1] || {};
-    const finalDescription = last.worldState ? JSON.stringify(last.worldState) : (last.worldNarration || last.narration || '');
+    let finalDescription = (last.worldNarration || last.narration || '');
+    if (!finalDescription) {
+      const ws = last.worldState;
+      if (ws && typeof ws === 'object' && Object.keys(ws).length > 0) {
+        finalDescription = JSON.stringify(ws);
+      }
+    }
     const prompt = buildFinalPrompt({ finalDescription });
 
     const response = await fetch('https://api.openai.com/v1/images/edits'.replace('/edits','/generations'), {

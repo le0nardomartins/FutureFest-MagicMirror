@@ -1,3 +1,5 @@
+;(function(){
+'use strict';
 // Web Chat service using OpenAI for STT (transcription) and TTS (audio synthesis)
 
 
@@ -11,42 +13,33 @@ window.__getEnvVar = window.__getEnvVar || function(key) {
 };
 
 // Getters dinâmicos
-const getOPENAI_API_KEY = () => (window.__getEnvVar('OPENAI_API_KEY') || '').trim();
+const __getOPENAI_API_KEY = () => (window.__getEnvVar('OPENAI_API_KEY') || '').trim();
 const getELEVENLABS_API_KEY = () => (window.__getEnvVar('ELEVENLABS_API_KEY') || '').trim();
 const getELEVENLABS_VOICE_ID = () => (window.__getEnvVar('ELEVENLABS_VOICE_ID') || '').trim();
 
-// Verifica se as chaves estão presentes
-if (!getOPENAI_API_KEY()) {
-  console.error('[chat-web] ❌ OPENAI_API_KEY não encontrada');
-  console.error('[chat-web] Verifique se a variável de ambiente OPENAI_API_KEY está configurada na Vercel');
-}
-
-if (!getELEVENLABS_API_KEY()) {
-  console.error('[chat-web] ❌ ELEVENLABS_API_KEY não encontrada');
-  console.error('[chat-web] Verifique se a variável de ambiente ELEVENLABS_API_KEY está configurada na Vercel');
-}
-
-if (!getELEVENLABS_VOICE_ID()) {
-  console.error('[chat-web] ❌ ELEVENLABS_VOICE_ID não encontrada');
-  console.error('[chat-web] Verifique se a variável de ambiente ELEVENLABS_VOICE_ID está configurada na Vercel');
-}
-try {
-  const preview = (getOPENAI_API_KEY() || '').trim();
-  console.log('[chat-web] OPENAI_API_KEY presente:', preview ? 'sim' : 'não', '| preview:', preview ? (preview.slice(0, 20) + '...') : 'N/A');
-  
-  const elevenPreview = (getELEVENLABS_API_KEY() || '').trim();
-  console.log('[chat-web] ELEVENLABS_API_KEY presente:', elevenPreview ? 'sim' : 'não', '| preview:', elevenPreview ? (elevenPreview.slice(0, 20) + '...') : 'N/A');
-  console.log('[chat-web] ELEVENLABS_VOICE_ID:', getELEVENLABS_VOICE_ID());
-  
-  if (!elevenPreview) {
-    console.error('[chat-web] ⚠️  ELEVENLABS_API_KEY não encontrada!');
-  }
-} catch {}
-const buildJSONHeaders = () => ({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${getOPENAI_API_KEY()}` });
-const buildAuthHeaders = () => ({ 'Authorization': `Bearer ${getOPENAI_API_KEY()}` });
+// Logs iniciais suavizados: aguarda /api/env preencher as metas antes de avisar
+(function(){
+  const delayMs = 2500;
+  setTimeout(() => {
+    try {
+      const k = (__getOPENAI_API_KEY() || '').trim();
+      const e = (getELEVENLABS_API_KEY() || '').trim();
+      const v = (getELEVENLABS_VOICE_ID() || '').trim();
+      // Só avisa se, após o atraso, ainda estiver faltando
+      if (!k) console.warn('[chat-web] OPENAI_API_KEY ainda não disponível (aguardando /api/env)');
+      if (!e) console.warn('[chat-web] ELEVENLABS_API_KEY ainda não disponível (aguardando /api/env)');
+      if (!v) console.warn('[chat-web] ELEVENLABS_VOICE_ID ainda não disponível (aguardando /api/env)');
+      // Mostra um preview curto apenas quando disponível
+      if (k) console.log('[chat-web] OPENAI_API_KEY carregada (preview):', k.slice(0, 8) + '...');
+      if (e) console.log('[chat-web] ELEVENLABS_API_KEY carregada (preview):', e.slice(0, 8) + '...');
+    } catch {}
+  }, delayMs);
+})();
+const buildJSONHeaders = () => ({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${__getOPENAI_API_KEY()}` });
+const buildAuthHeaders = () => ({ 'Authorization': `Bearer ${__getOPENAI_API_KEY()}` });
 
 const getOpenAIKeyPreview = () => {
-  const key = (getOPENAI_API_KEY() || '').trim();
+  const key = (__getOPENAI_API_KEY() || '').trim();
   return { found: !!key, preview: key ? `${key.slice(0, 20)}...` : 'N/A' };
 };
 
@@ -107,10 +100,10 @@ const recordUserOnce = async ({ maxMs = 20000, silenceMs = 2000 } = {}) => {
 // OpenAI Whisper transcription
 const transcribeWithOpenAI = async (audioBlob, { language = 'pt' } = {}) => {
   // Aguarda a chave estar disponível
-  if (!(getOPENAI_API_KEY())) {
+  if (!(__getOPENAI_API_KEY())) {
     await (async () => {
       const start = Date.now();
-      while (Date.now() - start < 5000 && !getOPENAI_API_KEY()) {
+      while (Date.now() - start < 5000 && !__getOPENAI_API_KEY()) {
         await new Promise(r => setTimeout(r, 100));
       }
     })();
@@ -241,12 +234,12 @@ const loadClimasList = async () => {
 };
 
 const __waitForOpenAIKey = async (timeoutMs = 5000) => {
-  if (getOPENAI_API_KEY()) return true;
+  if (__getOPENAI_API_KEY()) return true;
   const start = Date.now();
-  while (Date.now() - start < timeoutMs && !getOPENAI_API_KEY()) {
+  while (Date.now() - start < timeoutMs && !__getOPENAI_API_KEY()) {
     await new Promise(r => setTimeout(r, 100));
   }
-  return !!getOPENAI_API_KEY();
+  return !!__getOPENAI_API_KEY();
 };
 
 const classifyClimateFromNarration = async (narrationText) => {
@@ -310,7 +303,7 @@ const postClimateToHardware = async (clima) => {
 
 // Conversation engine with 15 stages, history, and stage-specific instructions
 const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
-  const buildHeaders = () => ({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${getOPENAI_API_KEY()}` });
+  const buildHeaders = () => ({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${__getOPENAI_API_KEY()}` });
   const worldStages = [];
   let currentStage = 0; // número de estágios já concluídos
   let introContext = '';
@@ -384,9 +377,9 @@ const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
   // Pré-estágio 0: contextualização do mundo (sem pergunta)
   const prepareIntroContext = async () => {
     // Aguarda chave
-    if (!getOPENAI_API_KEY()) {
+    if (!__getOPENAI_API_KEY()) {
       const start = Date.now();
-      while (Date.now() - start < 5000 && !getOPENAI_API_KEY()) {
+      while (Date.now() - start < 5000 && !__getOPENAI_API_KEY()) {
         await new Promise(r => setTimeout(r, 100));
       }
     }
@@ -463,9 +456,9 @@ const createConversationEngine = ({ onWorldUpdate, onFinish, email }) => {
     console.log('[chat] getNext → estágio', stageNumber, '| userText len:', (userText || '').length, '| priorState?', !!priorState);
 
     // Aguarda env antes de chamar a OpenAI
-    if (!getOPENAI_API_KEY()) {
+    if (!__getOPENAI_API_KEY()) {
       const start = Date.now();
-      while (Date.now() - start < 5000 && !getOPENAI_API_KEY()) {
+      while (Date.now() - start < 5000 && !__getOPENAI_API_KEY()) {
         await new Promise(r => setTimeout(r, 100));
       }
     }
@@ -650,7 +643,7 @@ const summarizeTimeline = async (worldStages) => {
   // Garante env antes de resumir
   await waitForEnv(['OPENAI_API_KEY']);
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getOPENAI_API_KEY()}` }, body: JSON.stringify({ model: 'gpt-4o-mini', messages, temperature: 0.5 })
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${__getOPENAI_API_KEY()}` }, body: JSON.stringify({ model: 'gpt-4o-mini', messages, temperature: 0.5 })
   });
   if (!resp.ok) { const err = await resp.text(); throw new Error(`timeline summary error: ${resp.status} - ${err}`); }
   const data = await resp.json();
@@ -678,3 +671,5 @@ const sendUserImageByEmail = async ({ email, imageDataUrl }) => {
 window.createAIEntityChat = createAIEntityChat;
 window.getOpenAIKeyPreview = getOpenAIKeyPreview;
 window.createConversationEngine = createConversationEngine;
+
+})();

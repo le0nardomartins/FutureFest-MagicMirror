@@ -18,10 +18,35 @@
     <link rel="apple-touch-icon" sizes="180x180" href="../assets/favicon/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon/favicon-16x16.png">
-    <link rel="manifest" href="../assets/favicon/site.webmanifest">
+    <!-- Manifest injetado por script para evitar 401 em previews -->
     <link rel="icon" href="../assets/favicon/favicon.ico">
     <link rel="stylesheet" href="../styles.css">
     <link rel="stylesheet" href="./styles/pages-styles.css">
+    <script>
+        (function(){
+            try {
+                var origin = location.origin;
+                var manifest = {
+                    name: 'Uma Jornada no Nosso Tempo',
+                    short_name: 'Jornada',
+                    start_url: origin + '/pages/presentation-scene.html',
+                    display: 'standalone',
+                    background_color: '#000000',
+                    theme_color: '#000000',
+                    icons: [
+                        { src: origin + '/assets/favicon/android-chrome-192x192.png', sizes: '192x192', type: 'image/png' },
+                        { src: origin + '/assets/favicon/android-chrome-512x512.png', sizes: '512x512', type: 'image/png' }
+                    ]
+                };
+                var blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+                var url = URL.createObjectURL(blob);
+                var link = document.createElement('link');
+                link.rel = 'manifest';
+                link.href = url;
+                document.head.appendChild(link);
+            } catch (e) {}
+        })();
+    </script>
     <style>
         /* Estilos específicos para a cena de apresentação */
         #sound-wave-container {
@@ -130,27 +155,20 @@
 
     <script src="../cursor-effects.js"></script>
     <script>
-        // Requisita fullscreen ao entrar
-        (async function(){
+        // Fullscreen deve ser solicitado apenas por gesto do usuário
+        const tryRequestFullscreen = async () => {
             try {
                 const el = document.documentElement;
-                if (!document.fullscreenElement) {
-                    if (el.requestFullscreen) await el.requestFullscreen();
-                    else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
-                    else if (el.msRequestFullscreen) await el.msRequestFullscreen();
+                if (!document.fullscreenElement && el && el.requestFullscreen) {
+                    await el.requestFullscreen();
                 }
             } catch {}
-        })();
-        document.addEventListener('fullscreenchange', async () => {
-            try {
-                if (!document.fullscreenElement && !window.__allowExitFS) {
-                    const el = document.documentElement;
-                    if (el.requestFullscreen) await el.requestFullscreen();
-                    else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
-                    else if (el.msRequestFullscreen) await el.msRequestFullscreen();
-                }
-            } catch {}
-        });
+        };
+        // Tenta apenas na primeira interação do usuário
+        const __onceFS = () => { tryRequestFullscreen(); window.removeEventListener('pointerdown', __onceFS); window.removeEventListener('keydown', __onceFS); window.removeEventListener('touchstart', __onceFS); };
+        window.addEventListener('pointerdown', __onceFS, { once: true });
+        window.addEventListener('keydown', __onceFS, { once: true });
+        window.addEventListener('touchstart', __onceFS, { once: true });
         // Preenche as meta tags com as variáveis de ambiente da Vercel (igual na ai-entity)
         (async function() {
             const envVars = [
@@ -303,6 +321,7 @@
             continueButton.addEventListener('click', function() {
                 clickSound.currentTime = 0;
                 clickSound.play().catch(() => {});
+                try { if (typeof tryRequestFullscreen === 'function') tryRequestFullscreen(); } catch {}
                 showEmailOverlay();
             });
             continueButton.addEventListener('mouseenter', function() {
@@ -313,6 +332,7 @@
             btnSkipToAI.addEventListener('click', function() {
                 try { clickSound.currentTime = 0; clickSound.play().catch(() => {}); } catch {}
                 soundWave.stop();
+                try { if (typeof tryRequestFullscreen === 'function') tryRequestFullscreen(); } catch {}
                 window.location.href = 'ai-entity.html';
             });
 

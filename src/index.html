@@ -6,9 +6,34 @@
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/favicon/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="./assets/favicon/favicon-16x16.png">
-    <link rel="manifest" href="./assets/favicon/site.webmanifest">
+    <!-- Manifest injetado por script para evitar 401 em previews -->
     <link rel="icon" href="./assets/favicon/favicon.ico">
     <link rel="stylesheet" href="./styles.css">
+    <script>
+    (function(){
+        try {
+            var origin = location.origin;
+            var manifest = {
+                name: "Uma Jornada no Nosso Tempo",
+                short_name: "Jornada",
+                start_url: origin + "/",
+                display: "standalone",
+                background_color: "#000000",
+                theme_color: "#000000",
+                icons: [
+                    { src: origin + "/assets/favicon/android-chrome-192x192.png", sizes: "192x192", type: "image/png" },
+                    { src: origin + "/assets/favicon/android-chrome-512x512.png", sizes: "512x512", type: "image/png" }
+                ]
+            };
+            var blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+            var url = URL.createObjectURL(blob);
+            var link = document.createElement('link');
+            link.rel = 'manifest';
+            link.href = url;
+            document.head.appendChild(link);
+        } catch (e) {}
+    })();
+    </script>
 </head>
 <body>
     <!-- Elementos do cursor personalizado -->
@@ -16,7 +41,7 @@
     <div class="cursor-trail"></div>
     
     <!-- Elemento de áudio para a música tema -->
-    <audio id="background-music" loop preload="auto" autoplay playsinline>
+    <audio id="background-music" loop preload="auto" playsinline>
         <source src="./assets/audio/main-theme.wav" type="audio/wav">
         Seu navegador não suporta o elemento de áudio.
     </audio>
@@ -52,40 +77,29 @@
     <script src="./cursor-effects.js"></script>
     <script src="./game.js"></script>
     <script>
-        // Reproduzir música de fundo ao carregar a página
+        // Inicialização baseada em gesto do usuário (evita erros de autoplay/fullscreen)
         document.addEventListener('DOMContentLoaded', function() {
-            const reqFSIfPossible = async () => {
+            const backgroundMusic = document.getElementById('background-music');
+            try { backgroundMusic.volume = 0.7; backgroundMusic.setAttribute('playsinline',''); } catch {}
+
+            const requestFS = async () => {
                 try {
                     const el = document.documentElement;
-                    if (!document.fullscreenElement) {
-                        if (el.requestFullscreen) await el.requestFullscreen();
-                        else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
-                        else if (el.msRequestFullscreen) await el.msRequestFullscreen();
+                    if (!document.fullscreenElement && el && el.requestFullscreen) {
+                        await el.requestFullscreen();
                     }
                 } catch {}
             };
-            reqFSIfPossible();
-            document.addEventListener('fullscreenchange', reqFSIfPossible);
-            const backgroundMusic = document.getElementById('background-music');
-            try { backgroundMusic.volume = 0.7; backgroundMusic.setAttribute('playsinline',''); } catch {}
-            
-            // Tentativa de reprodução automática (pode ser bloqueada pelos navegadores)
-            backgroundMusic.play().catch(function(error) {
-                console.log("Reprodução automática bloqueada pelo navegador:", error);
-                // Ativa som na primeira interação do usuário
-                const tryEnable = () => {
-                    reqFSIfPossible();
-                    backgroundMusic.muted = false;
-                    backgroundMusic.play().then(() => {
-                        window.removeEventListener('pointerdown', tryEnable);
-                        window.removeEventListener('keydown', tryEnable);
-                        window.removeEventListener('touchstart', tryEnable);
-                    }).catch(() => {});
-                };
-                window.addEventListener('pointerdown', tryEnable, { once: true });
-                window.addEventListener('keydown', tryEnable, { once: true });
-                window.addEventListener('touchstart', tryEnable, { once: true });
-            });
+            const enableOnGesture = () => {
+                try { backgroundMusic.muted = false; backgroundMusic.play().catch(() => {}); } catch {}
+                requestFS();
+                window.removeEventListener('pointerdown', enableOnGesture);
+                window.removeEventListener('keydown', enableOnGesture);
+                window.removeEventListener('touchstart', enableOnGesture);
+            };
+            window.addEventListener('pointerdown', enableOnGesture, { once: true });
+            window.addEventListener('keydown', enableOnGesture, { once: true });
+            window.addEventListener('touchstart', enableOnGesture, { once: true });
 
             // Botão de tela cheia no topo direito
             if (!document.getElementById('fullscreen-btn')) {

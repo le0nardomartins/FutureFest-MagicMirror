@@ -29,6 +29,13 @@ class SoundWaveAnimation {
         // Criar canvas
         this.canvas = document.createElement('canvas');
         this.ctx = this.canvas.getContext('2d');
+        // Garante cobertura total e evita distorções no flex container
+        this.canvas.style.position = 'absolute';
+        this.canvas.style.left = '0';
+        this.canvas.style.top = '0';
+        this.canvas.style.width = '100%';
+        this.canvas.style.height = '100%';
+        this.canvas.style.display = 'block';
         this.container.appendChild(this.canvas);
         
         // Configurar tamanho do canvas
@@ -48,8 +55,14 @@ class SoundWaveAnimation {
     }
     
     resize() {
-        this.canvas.width = this.container.offsetWidth;
-        this.canvas.height = this.container.offsetHeight;
+        const cssW = this.container.clientWidth || this.container.offsetWidth;
+        const cssH = this.container.clientHeight || this.container.offsetHeight;
+        const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+        // Ajusta o buffer interno para alta densidade sem alterar CSS
+        this.canvas.width = Math.max(1, Math.floor(cssW * dpr));
+        this.canvas.height = Math.max(1, Math.floor(cssH * dpr));
+        // Normaliza o sistema de coordenadas para 1:1 com CSS
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
     
     createWaves(count) {
