@@ -1,6 +1,6 @@
-# Uma Jornada no Nosso Tempo
+# Espelho Mágico
 
-Um jogo narrativo interativo onde suas escolhas determinam o rumo da história. Execute o jogo pela vercel e coloque as variáveis no embiente interno da vercel para funcionar.
+Um jogo narrativo interativo onde suas escolhas de sobre seus cuidados, estilo de vida e saúde determinam como você será quando for mais velho.
 
 ## 📋 Pré-requisitos
 

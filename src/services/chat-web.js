@@ -652,9 +652,48 @@ const sendUserImageByEmail = async ({ email, imageDataUrl }) => {
   } catch (e) { console.error('emailjsSendImage error:', e); }
 };
 
-// Expor funções no window para uso global
-window.createAIEntityChat = createAIEntityChat;
-window.getOpenAIKeyPreview = getOpenAIKeyPreview;
-window.createConversationEngine = createConversationEngine;
+// Chat simples (texto ↔ texto) com histórico local — sem TTS/STT e sem encadeamento
+const createSimpleChat = () => {
+  const messages = [
+    { role: 'system', content: 'Você é um assistente útil. Responda sempre em português do Brasil, de forma clara e direta.' }
+  ];
+  const send = async (userText) => {
+    const text = String(userText || '').trim();
+    if (!text) return '';
+    // Aguarda a chave estar disponível (até 5s)
+    if (!(__getOPENAI_API_KEY())) {
+      const start = Date.now();
+      while (Date.now() - start < 5000 && !__getOPENAI_API_KEY()) {
+        await new Promise(r => setTimeout(r, 100));
+      }
+    }
+    messages.push({ role: 'user', content: text });
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${__getOPENAI_API_KEY()}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages,
+        temperature: 0.6
+      })
+    });
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(`Chat API error: ${resp.status} - ${err}`);
+    }
+    const data = await resp.json();
+    const reply = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+    const clean = (typeof sanitizeForSpeech === 'function') ? sanitizeForSpeech(reply) : String(reply || '').trim();
+    messages.push({ role: 'assistant', content: clean });
+    return clean;
+  };
+  return { send };
+};
+
+// Expor funções no window para uso global (legacy + novo chat simples)
+window.createAIEntityChat = window.createAIEntityChat || createAIEntityChat;
+window.getOpenAIKeyPreview = window.getOpenAIKeyPreview || getOpenAIKeyPreview;
+window.createConversationEngine = window.createConversationEngine || createConversationEngine;
+window.createSimpleChat = window.createSimpleChat || createSimpleChat;
 
 })();

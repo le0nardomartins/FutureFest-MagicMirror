@@ -2,334 +2,98 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Entidade AI</title>
+    <title>Conversa com a IA</title>
     <link rel="apple-touch-icon" sizes="180x180" href="../assets/favicon/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon/favicon-16x16.png">
-    <!-- Manifest injetado por script para evitar 401 em previews -->
     <link rel="icon" href="../assets/favicon/favicon.ico">
-    
-    <!-- Variáveis de ambiente para Vercel -->
     <meta name="OPENAI_API_KEY" content="">
-    <meta name="ELEVENLABS_API_KEY" content="">
-    <meta name="ELEVENLABS_VOICE_ID" content="">
-    <meta name="EMAILJS_SERVICE_ID" content="">
-    <meta name="EMAILJS_TEMPLATE_ID" content="">
-    <meta name="EMAILJS_PUBLIC_KEY" content="">
-    <meta name="CLOUD_NAME" content="">
-    <meta name="API_KEY" content="">
-    <meta name="API_SECRET" content="">
-    <meta name="CLOUDINARY_URL" content="">
-    <meta name="CLOUDINARY_UPLOAD_PRESET" content="">
-    
     <script>
-        // Preenche as meta tags com as variáveis de ambiente da Vercel
+        // Carrega OPENAI_API_KEY da API e injeta na meta
         (async function() {
-            const envVars = [
-                'OPENAI_API_KEY',
-                'ELEVENLABS_API_KEY', 
-                'ELEVENLABS_VOICE_ID',
-                'EMAILJS_SERVICE_ID',
-                'EMAILJS_TEMPLATE_ID',
-                'EMAILJS_PUBLIC_KEY',
-                'CLOUD_NAME',
-                'API_KEY',
-                'API_SECRET',
-                'CLOUDINARY_URL',
-                'CLOUDINARY_UPLOAD_PRESET'
-            ];
-            
             try {
-                // Busca as variáveis da API da Vercel
                 const response = await fetch('/api/env');
                 if (response.ok) {
                     const envData = await response.json();
-                    console.log('[env] Variáveis carregadas da Vercel:', envData);
-                    
-                    envVars.forEach(key => {
-                        const meta = document.querySelector(`meta[name="${key}"]`);
-                        if (meta && envData[key]) {
-                            meta.setAttribute('content', envData[key]);
-                            console.log(`[env] ${key} carregada:`, envData[key].slice(0, 20) + '...');
-                        } else {
-                            console.warn(`[env] ${key} não encontrada na Vercel`);
-                        }
-                    });
-                } else {
-                    console.error('[env] Erro ao carregar variáveis da Vercel:', response.status);
+                    const meta = document.querySelector('meta[name="OPENAI_API_KEY"]');
+                    if (meta && envData.OPENAI_API_KEY) {
+                        meta.setAttribute('content', envData.OPENAI_API_KEY);
+                    }
                 }
-            } catch (error) {
-                console.error('[env] Erro ao carregar variáveis da Vercel:', error);
+            } catch (e) {
+                console.error('[env] falha ao carregar /api/env', e);
             }
-        })();
-    </script>
-    <link rel="stylesheet" href="../styles.css">
-    <link rel="stylesheet" href="./styles/pages-styles.css">
-    <script>
-        (function(){
-            try {
-                var origin = location.origin;
-                var manifest = {
-                    name: 'Uma Jornada no Nosso Tempo',
-                    short_name: 'Jornada',
-                    start_url: origin + '/pages/ai-entity.html',
-                    display: 'standalone',
-                    background_color: '#000000',
-                    theme_color: '#000000',
-                    icons: [
-                        { src: origin + '/assets/favicon/android-chrome-192x192.png', sizes: '192x192', type: 'image/png' },
-                        { src: origin + '/assets/favicon/android-chrome-512x512.png', sizes: '512x512', type: 'image/png' }
-                    ]
-                };
-                var blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
-                var url = URL.createObjectURL(blob);
-                var link = document.createElement('link');
-                link.rel = 'manifest';
-                link.href = url;
-                document.head.appendChild(link);
-            } catch (e) {}
         })();
     </script>
     <style>
-        #sound-wave-container { position:absolute; inset:0; background:#000; z-index: 1; }
-        .overlay { position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:center; padding: 24px; z-index: 2; }
-        .bubble { max-width: min(900px, 90vw); width: 100%; background: rgba(0,0,0,0.55); border:1px solid rgba(0,255,220,0.25); border-radius:16px; padding:18px; color:#fff; font-family:'Outfit', sans-serif; box-shadow:0 0 25px rgba(0,255,220,0.18); }
-        .row { display:flex; gap:10px; align-items:center; }
-        .label { font-size:12px; opacity:0.85; margin-bottom:6px; }
-        .q { color:#A0FFF0; }
-        .n { color:#FFDCA8; }
-        .controls { position:absolute; top:12px; right:12px; z-index:3; display:flex; gap:8px; }
-        .btn { padding: 8px 12px; border-radius:10px; border:1px solid rgba(0,255,220,0.5); background: rgba(0,0,0,0.35); color:#fff; cursor:pointer; }
-        .btn:hover { background: rgba(0,255,220,0.12); }
-        .loading { position:absolute; inset:0; background:rgba(0,0,0,0.8); display:none; align-items:center; justify-content:center; flex-direction:column; gap:16px; color:#fff; z-index:5; }
-        .loading.show { display:flex; }
-        video, img { max-width: 60vw; max-height: 50vh; border: 1px solid rgba(0,255,220,0.2); border-radius: 10px; }
+        html, body { margin:0; padding:0; height:100%; background:#05090c; color:#eafaf7; font-family:'Outfit', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+        .app { position:relative; height:100%; max-width: 980px; margin: 0 auto; display:flex; flex-direction:column; }
+        .header { padding: 14px 16px; border-bottom: 1px solid rgba(0,255,220,0.12); color:#A0FFF0; }
+        .messages { flex:1; overflow:auto; padding: 16px; display:flex; flex-direction:column; gap: 12px; }
+        .msg { max-width: 78%; padding: 12px 14px; border-radius: 14px; line-height: 1.4; }
+        .msg.user { align-self: flex-end; background: rgba(0,255,220,0.12); border:1px solid rgba(0,255,220,0.25); }
+        .msg.assistant { align-self: flex-start; background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); }
+        .composer { display:flex; gap:8px; padding: 12px; border-top:1px solid rgba(0,255,220,0.12); background: rgba(0,0,0,0.35); }
+        .composer input { flex:1; padding: 12px 14px; border-radius: 12px; border:1px solid rgba(0,255,220,0.25); background: rgba(255,255,255,0.04); color:#fff; }
+        .composer button { padding: 12px 16px; border-radius: 12px; border:1px solid rgba(0,255,220,0.45); background: rgba(0,255,220,0.10); color:#eafaf7; cursor:pointer; }
+        .composer button:disabled { opacity: 0.6; cursor: not-allowed; }
     </style>
 </head>
 <body>
-    <div class="cursor"></div>
-    <div class="cursor-trail"></div>
-    <div id="game-container">
-        <div id="sound-wave-container"></div>
-        <div id="fade-final" style="position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity 1.2s ease;z-index:9"></div>
-        <div class="controls">
-            <button id="btn-fullscreen" class="btn">Tela cheia</button>
-            <button id="btn-exit" class="btn">Encerrar</button>
-        </div>
-        <div class="overlay">
-            <div class="bubble">
-                <div class="label">Entidade AI</div>
-                <div id="ai-question" class="q">Preparando pergunta...</div>
-                <div id="ai-narration" class="n" style="margin-top:6px">Aguardando...</div>
-            </div>
-        </div>
-        <div id="loading" class="loading">
-            <div>Gerando imagem e vídeo do seu mundo...</div>
-            <div id="progress">Preparando...</div>
-            <div id="results" style="display:none; text-align:center">
-                <div style="margin:8px 0">Imagem final</div>
-                <img id="result-image" />
-            </div>
-            <button id="btn-finish" class="btn" style="display:none">Concluir</button>
-        </div>
+    <div class="app">
+        <div class="header">Conversa com a IA</div>
+        <div id="messages" class="messages"></div>
+        <form id="composer" class="composer">
+            <input id="input" type="text" placeholder="Digite sua mensagem..." autocomplete="off" />
+            <button id="send" type="submit">Enviar</button>
+        </form>
     </div>
-
-    <script src="../cursor-effects.js"></script>
-    <script src="../sound-wave-animation.js"></script>
-    <script>
-        // Fullscreen somente por gesto do usuário
-        const tryRequestFullscreen = async () => {
-            try {
-                const el = document.documentElement;
-                if (!document.fullscreenElement && el && el.requestFullscreen) {
-                    await el.requestFullscreen();
-                }
-            } catch {}
-        };
-        // Tenta apenas na primeira interação do usuário
-        const __onceFS = () => { tryRequestFullscreen(); window.removeEventListener('pointerdown', __onceFS); window.removeEventListener('keydown', __onceFS); window.removeEventListener('touchstart', __onceFS); };
-        window.addEventListener('pointerdown', __onceFS, { once: true });
-        window.addEventListener('keydown', __onceFS, { once: true });
-        window.addEventListener('touchstart', __onceFS, { once: true });
-        // Teste imediato de disponibilidade das variáveis
-        console.log('[ai-entity] Teste imediato:');
-    </script>
-    <!-- SDK oficial do EmailJS (necessário para window.emailjs) -->
-    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-    <script src="../services/dalle.js"></script>
-    <script src="../services/emailjs.js"></script>
     <script src="../services/chat-web.js"></script>
     <script>
-        console.log('[ai-entity] Iniciando script...');
-        // Gate de readiness: aguarda variáveis essenciais antes de iniciar
-        window.__getEnvVar = window.__getEnvVar || function(key){
-            const meta = document.querySelector(`meta[name="${key}"]`);
-            return meta && meta.getAttribute('content') || '';
+        const $messages = document.getElementById('messages');
+        const $form = document.getElementById('composer');
+        const $input = document.getElementById('input');
+        const $send = document.getElementById('send');
+
+        const appendMsg = (text, who) => {
+            const div = document.createElement('div');
+            div.className = 'msg ' + who;
+            div.textContent = text;
+            $messages.appendChild(div);
+            $messages.scrollTop = $messages.scrollHeight;
         };
-        const waitEnvReady = async (keys, to=5000) => {
+
+        // Aguarda createSimpleChat estar disponível
+        const waitSimpleReady = async (to=6000) => {
             const start = Date.now();
-            while (Date.now() - start < to) {
-                if (keys.every(k => (window.__getEnvVar(k) || '').trim())) return true;
-                await new Promise(r => setTimeout(r, 100));
+            while (Date.now() - start < to && !(window.createSimpleChat)) {
+                await new Promise(r => setTimeout(r, 50));
             }
-            return false;
+            return !!window.createSimpleChat;
         };
-        const required = ['OPENAI_API_KEY','ELEVENLABS_API_KEY','ELEVENLABS_VOICE_ID'];
+
         (async () => {
-            const ready = await waitEnvReady(required, 5000);
-            if (!ready) {
-                console.error('[ai-entity] ❌ Variáveis obrigatórias não carregaram a tempo:', required);
-                return;
-            }
-        
-        const params = new URLSearchParams(window.location.search);
-        const email = params.get('email') || '';
-        console.log('[ai-entity] Email:', email);
+            await waitSimpleReady(6000);
+            const chat = window.createSimpleChat();
+            appendMsg('Olá! Como posso ajudar você hoje?', 'assistant');
 
-        console.log('[ai-entity] Criando SoundWaveAnimation...');
-        const soundWave = new SoundWaveAnimation('sound-wave-container');
-        console.log('[ai-entity] SoundWaveAnimation criada:', soundWave);
-        const $q = document.getElementById('ai-question');
-        const $n = document.getElementById('ai-narration');
-        const $loading = document.getElementById('loading');
-        const $progress = document.getElementById('progress');
-        const $results = document.getElementById('results');
-        const $img = document.getElementById('result-image');
-        // vídeo removido: não geramos vídeo nesta experiência
-        const $btnFinish = document.getElementById('btn-finish');
-        const __setProgress = (msg) => { try { console.log('[final-image][progress]', msg); $progress.textContent = msg; } catch {} };
-
-        let lastWorldStages = [];
-
-        // Aguarda helper global do chat estar disponível
-        const waitChatReady = async (to=6000) => {
-            const start = Date.now();
-            while (Date.now()-start < to && !(window.createAIEntityChat)) {
-                await new Promise(r=>setTimeout(r,50));
-            }
-            return !!window.createAIEntityChat;
-        };
-        await waitChatReady(6000);
-
-        const chat = window.createAIEntityChat({
-            email,
-            onTranscript: (txt) => {},
-            onAIQuestion: (q) => { $q.textContent = q; },
-            onAINarration: (n) => { $n.textContent = n; },
-            onWorldUpdate: ({ worldStages }) => { lastWorldStages = worldStages; },
-            onFinish: async (payload) => {
-                // Sem tela de geração. Apenas narra encerramento e informa sobre email.
-                const params = new URLSearchParams(window.location.search);
-                const emailParam = (params.get('email') || '').trim();
-                const stages = (payload && payload.stages) || [];
-                const emailFromEngine = (payload && payload.email) || '';
-                const toEmail = emailParam || emailFromEngine || '';
-                if (toEmail) {
-                    // Promessa de envio que pode ser aguardada pelo finalizador
-                    window.__imageSendPromise = (async () => {
-                        try {
-                            $loading.classList.add('show');
-                            __setProgress('Preparando ambiente...');
-                            console.log('[final-image] destinatário:', toEmail);
-                            // Aguarda helpers carregarem
-                            const waitReady = async (to=6000) => {
-                                const start = Date.now();
-                                while (Date.now() - start < to && !(window.generateFinalWorldImage && window.buildFinalPrompt)) {
-                                    await new Promise(r=>setTimeout(r,50));
-                                }
-                                return !!(window.generateFinalWorldImage);
-                            };
-                            await waitReady(6000);
-                            __setProgress('Gerando imagem final...');
-                            const last = stages[stages.length-1] || {};
-                            let finalDesc = (last.worldNarration || last.narration || '');
-                            if (!finalDesc) {
-                                const ws = last.worldState;
-                                if (ws && typeof ws === 'object' && Object.keys(ws).length > 0) finalDesc = JSON.stringify(ws);
-                            }
-                            if (window.buildFinalPrompt) {
-                                const promptPreview = window.buildFinalPrompt({ finalDescription: finalDesc });
-                                console.log('[final-image] prompt →\n' + promptPreview);
-                            }
-                            const imageDataUrl = await window.generateFinalWorldImage(stages);
-                            console.log('[final-image] imagem gerada (dataURL length):', (imageDataUrl||'').length);
-                            try { $results.style.display = ''; $img.src = imageDataUrl; } catch {}
-                            __setProgress('Enviando por email...');
-                            if (window.emailjsSendImage) {
-                                window.__emailDebug = window.__emailDebug || [];
-                                window.__emailDebug.push({ ts: Date.now(), step: 'send_start', to: toEmail });
-                                const res = await window.emailjsSendImage({ to: toEmail, imageDataUrl });
-                                window.__emailDebug.push({ ts: Date.now(), step: 'send_ok', result: res });
-                                console.log('[final-image] envio concluído:', res);
-                            }
-                            __setProgress('Email enviado com sucesso!');
-                            try { $btnFinish.style.display = ''; } catch {}
-                            return true;
-                        } catch (e) {
-                            console.error('image generation/send failed', e);
-                            __setProgress('Falha ao gerar/enviar imagem: ' + (e && (e.text||e.message) || e));
-                            return false;
-                        }
-                    })();
+            $form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const text = ($input.value || '').trim();
+                if (!text) return;
+                appendMsg(text, 'user');
+                $input.value = '';
+                $input.disabled = true; $send.disabled = true;
+                try {
+                    const reply = await chat.send(text);
+                    appendMsg(reply || '...', 'assistant');
+                } catch (err) {
+                    console.error(err);
+                    appendMsg('Desculpe, ocorreu um erro ao consultar a IA.', 'assistant');
+                } finally {
+                    $input.disabled = false; $send.disabled = false; $input.focus();
                 }
-                // Mensagem final já foi narrada pelo estágio 8. Nada visual aqui.
-            },
-            onDebug: null
-        });
-
-        // Callback global para quando o chat finalizar completamente
-        window.__onFinalized = () => {
-            // Aguarda 5s e troca apenas uma vez
-            if (window.__finalRedirectScheduled) return;
-            window.__finalRedirectScheduled = true;
-            setTimeout(() => {
-                const fade = document.getElementById('fade-final');
-                if (fade) fade.style.opacity = '1';
-                setTimeout(() => { window.location.href = 'credits-scene.html'; }, 1200);
-            }, 5000);
-        };
-
-        document.getElementById('btn-exit').addEventListener('click', async () => {
-            try { if (window.__onFinalized) window.__onFinalized(); } catch {}
-            try { soundWave.stop(); } catch {}
-        });
-
-        // Alternância de tela cheia
-        const $btnFs = document.getElementById('btn-fullscreen');
-        const rootEl = document.documentElement;
-        const isFullscreen = () => !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
-        const reqFS = async () => {
-            try {
-                if (rootEl.requestFullscreen) return await rootEl.requestFullscreen();
-                if (rootEl.webkitRequestFullscreen) return await rootEl.webkitRequestFullscreen();
-                if (rootEl.msRequestFullscreen) return await rootEl.msRequestFullscreen();
-            } catch {}
-        };
-        const exitFS = async () => {
-            try {
-                if (document.exitFullscreen) return await document.exitFullscreen();
-                if (document.webkitExitFullscreen) return await document.webkitExitFullscreen();
-                if (document.msExitFullscreen) return await document.msExitFullscreen();
-            } catch {}
-        };
-        const updateFsButton = () => { $btnFs.textContent = isFullscreen() ? 'Sair da tela cheia' : 'Tela cheia'; };
-        document.addEventListener('fullscreenchange', updateFsButton);
-        document.addEventListener('webkitfullscreenchange', updateFsButton);
-        document.addEventListener('msfullscreenchange', updateFsButton);
-        updateFsButton();
-        $btnFs.addEventListener('click', async () => {
-            if (isFullscreen()) await exitFS(); else await reqFS();
-            updateFsButton();
-        });
-
-        $btnFinish.addEventListener('click', () => {
-            $loading.classList.remove('show');
-        });
-
-        // Start loop
-        console.log('[ai-entity] Iniciando chat...');
-        chat.start();
-        console.log('[ai-entity] Chat iniciado!');
+            });
         })();
     </script>
 </body>

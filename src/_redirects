@@ -1,7 +1,6 @@
-# Redirects para páginas específicas
-/presentation-scene.html /pages/presentation-scene.html 200
+# Redirects principais
+/ /pages/ai-entity.html 200
 /ai-entity.html /pages/ai-entity.html 200
-/start-email.html /pages/start-email.html 200
 
 # Servir arquivos estáticos
 /assets/* /assets/:splat 200
@@ -10,4 +9,4 @@
 /pages/* /pages/:splat 200
 
 # Fallback para SPA
-/* /index.html 200
+/* /pages/ai-entity.html 200
