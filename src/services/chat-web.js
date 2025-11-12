@@ -213,23 +213,8 @@ const __parseClimasCSV = (csvText) => {
 
 const loadClimasList = async () => {
   if (Array.isArray(__climasCache) && __climasCache.length) return __climasCache;
-  const candidates = ['/climas.csv', '../climas.csv', '../../climas.csv'];
-  for (const url of candidates) {
-    try {
-      const resp = await fetch(url, { method: 'GET' });
-      if (!resp.ok) continue;
-      const text = await resp.text();
-      const arr = __parseClimasCSV(text).map(x => x.trim()).filter(Boolean);
-      if (arr.length) {
-        __climasCache = Array.from(new Set(arr));
-        console.log('[climas] lista carregada de', url, '→', __climasCache);
-        return __climasCache;
-      }
-    } catch {}
-  }
-  // Fallback seguro
-  __climasCache = ['calor', 'vento', 'chuva'];
-  console.warn('[climas] usando fallback padrão:', __climasCache);
+  // Desabilitado: leitura de CSV. Usaremos apenas o fallback fixo.
+  __climasCache = ['Queimada', 'Aquecimento', 'Nevoeiro'];
   return __climasCache;
 };
 

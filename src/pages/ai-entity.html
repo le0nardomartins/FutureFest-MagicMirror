@@ -129,8 +129,6 @@
             <div id="results" style="display:none; text-align:center">
                 <div style="margin:8px 0">Imagem final</div>
                 <img id="result-image" />
-                <div style="margin:12px 0">Vídeo (prévia)</div>
-                <video id="result-video" controls></video>
             </div>
             <button id="btn-finish" class="btn" style="display:none">Concluir</button>
         </div>
@@ -197,7 +195,7 @@
         const $progress = document.getElementById('progress');
         const $results = document.getElementById('results');
         const $img = document.getElementById('result-image');
-        const $video = document.getElementById('result-video');
+        // vídeo removido: não geramos vídeo nesta experiência
         const $btnFinish = document.getElementById('btn-finish');
         const __setProgress = (msg) => { try { console.log('[final-image][progress]', msg); $progress.textContent = msg; } catch {} };
 
