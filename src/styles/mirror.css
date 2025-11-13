@@ -80,24 +80,7 @@ canvas#bg { position:absolute; inset:0; width:100%; height:100%; display:block; 
 /* Botão de microfone como ícone circular */
 #btn-mic { width:56px; height:56px; padding:0; border-radius:50%; display:flex; align-items:center; justify-content:center; border:1px solid rgba(0,0,0,0.75); }
 #btn-mic .icon { width:22px; height:22px; }
-#btn-mic .icon-stop { display:none; }
-#btn-mic.recording .icon-mic { display:none; }
-#btn-mic.recording .icon-stop { display:inline-block; }
 #btn-mic.recording { box-shadow: 0 0 22px rgba(255, 120, 160, 0.35), 0 0 40px rgba(255, 150, 190, 0.25); filter: brightness(1.05); }
 /* mensagens/estado */
-.state { 
-	min-height: 20px; 
-	text-align:center; 
-	font-size:14px; 
-	color:#2e1e26; 
-	font-weight:600; 
-	text-shadow: 0 1px 2px rgba(0,0,0,0.28); 
-	display:inline-block; 
-	margin: 6px auto 0; 
-	padding: 6px 10px; 
-	border-radius: 10px; 
-	background: rgba(255,255,255,0.55); 
-	backdrop-filter: blur(2px); 
-	border: 1px solid rgba(0,0,0,0.12); 
-}
+.state { min-height: 20px; text-align:center; font-size:14px; opacity:0.95; color:#5a3c49; }
 

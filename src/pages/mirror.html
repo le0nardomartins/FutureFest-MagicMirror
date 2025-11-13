@@ -25,20 +25,14 @@
 				</div>
 			</div>
 			<div class="state" id="state">Toque para começar a gravar sua mensagem.</div>
-            <div class="controls">
-                <button id="btn-mic" class="btn btn-primary" aria-label="Gravar áudio">
-                    <!-- Ícone microfone (default) -->
-                    <svg class="icon icon-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                        <path d="M12 1a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                        <path d="M19 10a7 7 0 0 1-14 0"></path>
-                        <path d="M12 19v4"></path>
-                    </svg>
-                    <!-- Ícone X (quando gravando) -->
-                    <svg class="icon icon-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                        <path d="M6 6 L18 18"></path>
-                        <path d="M18 6 L6 18"></path>
-                    </svg>
-                </button>
+			<div class="controls">
+				<button id="btn-mic" class="btn btn-primary" aria-label="Gravar áudio">
+					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M12 1a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+						<path d="M19 10a7 7 0 0 1-14 0"></path>
+						<path d="M12 19v4"></path>
+					</svg>
+				</button>
 				<button id="btn-download" class="btn hidden">Baixar imagem</button>
 				<button id="btn-reset" class="btn hidden">Refazer</button>
 			</div>
@@ -69,35 +63,20 @@
 			};
 			window.addEventListener('resize', resize); resize();
 			// paleta alvo: rosa claro, azul bebê e roxo claro
-            // paleta em 3 grupos balanceados: rosa, azul bebê, roxo claro
-            const groups = {
-                pink:  [330, 338, 346],
-                blue:  [204, 212, 220],
-                purple:[268, 278, 288]
-            };
-            const totalBlobs = 90;
-            const perGroup = Math.ceil(totalBlobs / 3);
-            const blobs = [];
-            function pushFrom(hues, count) {
-                for (let i = 0; i < count; i++) {
-                    const baseHue = hues[Math.floor(Math.random()*hues.length)];
-                    blobs.push({
-                        x: Math.random()*w, y: Math.random()*h,
-                        r: 120 + Math.random()*420,
-                        baseHue,
-                        h: baseHue,
-                        s: 78 + Math.random()*10,
-                        l: 68 + Math.random()*10,
-                        // velocidades iniciais mais lentas
-                        vx: (Math.random()*0.4-0.2), vy: (Math.random()*0.4-0.2)
-                    });
-                }
-            }
-            pushFrom(groups.pink,   perGroup);
-            pushFrom(groups.blue,   perGroup);
-            pushFrom(groups.purple, perGroup);
-            // se passou 90 por arredondamento, corta
-            blobs.length = totalBlobs;
+			const palette = [330, 340, 350, 210, 200, 220, 280, 290, 265];
+			// blobs coloridos ("massinha")
+			const blobs = Array.from({length: 90}).map(() => {
+				const baseHue = palette[Math.floor(Math.random()*palette.length)];
+				return {
+					x: Math.random()*w, y: Math.random()*h,
+					r: 120 + Math.random()*420,
+					h: baseHue + (Math.random()*8-4),
+					s: 78 + Math.random()*10,
+					l: 68 + Math.random()*10,
+					// velocidades iniciais mais lentas
+					vx: (Math.random()*0.4-0.2), vy: (Math.random()*0.4-0.2)
+				};
+			});
 			// partículas finas para brilho
 			const particles = Array.from({length: 220}).map(() => {
 				const baseHue = palette[Math.floor(Math.random()*palette.length)];
@@ -152,7 +131,7 @@
 					const dy = mouse.y - b.y;
 					const dist = Math.hypot(dx, dy) || 0.0001;
 					const influence = 340;
-                    if (dist < influence) {
+					if (dist < influence) {
 						const f = (1 - dist / influence);
 						// aceleração mais baixa para movimento mais devagar
 						const accel = 0.0006 * (f*f + 0.12);
@@ -163,9 +142,7 @@
 							b.vx -= dx * 0.0010 * (1 - dist / (b.r * 0.6));
 							b.vy -= dy * 0.0010 * (1 - dist / (b.r * 0.6));
 						}
-                        // mantém a cor próxima ao grupo de origem (evita tendenciar ao rosa)
-                        const drift = Math.sin(t*0.8 + dist*0.01) * 0.6;
-                        b.h = b.baseHue + drift;
+						b.h += Math.sin(t*0.8 + dist*0.01) * 0.25;
 					}
 					b.x += b.vx; b.y += b.vy;
 					// bounce suave
