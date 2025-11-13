@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+	<meta charset="UTF-8">
+	<title>Espelho Mágico</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="apple-touch-icon" sizes="180x180" href="../assets/favicon/apple-touch-icon.png">
+	<link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon/favicon-32x32.png">
+	<link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon/favicon-16x16.png">
+	<link rel="icon" href="../assets/favicon/favicon.ico">
+	<meta name="OPENAI_API_KEY" content="">
+	<meta name="ELEVENLABS_API_KEY" content="">
+	<link rel="stylesheet" href="../styles/mirror.css">
+</head>
+<body>
+	<div class="app">
+		<canvas id="bg"></canvas>
+		<div class="portal" aria-hidden="true"></div>
+		<div class="center">
+			<div id="mirror" class="mirror">
+				<div class="mirror-inner">
+					<video id="cam" autoplay playsinline muted></video>
+					<img id="result-img" class="hidden" alt="resultado"/>
+					<div id="mirror-overlay"></div>
+				</div>
+			</div>
+			<div class="state" id="state">Toque para começar a gravar sua mensagem.</div>
+            <div class="controls">
+                <button id="btn-mic" class="btn btn-primary" aria-label="Gravar áudio">
+                    <!-- Ícone microfone (default) -->
+                    <svg class="icon icon-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M12 1a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                        <path d="M19 10a7 7 0 0 1-14 0"></path>
+                        <path d="M12 19v4"></path>
+                    </svg>
+                    <!-- Ícone X (quando gravando) -->
+                    <svg class="icon icon-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M6 6 L18 18"></path>
+                        <path d="M18 6 L6 18"></path>
+                    </svg>
+                </button>
+				<button id="btn-download" class="btn hidden">Baixar imagem</button>
+				<button id="btn-reset" class="btn hidden">Refazer</button>
+			</div>
+		</div>
+	</div>
+	<script>
+		// Injeta env
+		(async function injectEnv(){
+			try {
+				const r = await fetch('/api/env'); if (!r.ok) return;
+				const env = await r.json();
+				const set = (k,v) => { const m = document.querySelector(`meta[name="${k}"]`); if (m && v) m.setAttribute('content', v); };
+				set('OPENAI_API_KEY', env.OPENAI_API_KEY || '');
+				set('ELEVENLABS_API_KEY', env.ELEVENLABS_API_KEY || '');
+			} catch {}
+		})();
+
+		// Fundo \"massinha viva\" multicolorida (metaballs leves) + partículas com interação do mouse
+		(function gooeyBackground(){
+			const canvas = document.getElementById('bg');
+			const ctx = canvas.getContext('2d');
+			let w, h, dpr;
+			const resize = () => {
+				dpr = window.devicePixelRatio || 1;
+				w = canvas.clientWidth; h = canvas.clientHeight;
+				canvas.width = Math.floor(w * dpr); canvas.height = Math.floor(h * dpr);
+				ctx.setTransform(dpr,0,0,dpr,0,0);
+			};
+			window.addEventListener('resize', resize); resize();
+			// paleta alvo: rosa claro, azul bebê e roxo claro
+            // paleta em 3 grupos balanceados: rosa, azul bebê, roxo claro
+            const groups = {
+                pink:  [330, 338, 346],
+                blue:  [204, 212, 220],
+                purple:[268, 278, 288]
+            };
+            const totalBlobs = 90;
+            const perGroup = Math.ceil(totalBlobs / 3);
+            const blobs = [];
+            function pushFrom(hues, count) {
+                for (let i = 0; i < count; i++) {
+                    const baseHue = hues[Math.floor(Math.random()*hues.length)];
+                    blobs.push({
+                        x: Math.random()*w, y: Math.random()*h,
+                        r: 120 + Math.random()*420,
+                        baseHue,
+                        h: baseHue,
+                        s: 78 + Math.random()*10,
+                        l: 68 + Math.random()*10,
+                        // velocidades iniciais mais lentas
+                        vx: (Math.random()*0.4-0.2), vy: (Math.random()*0.4-0.2)
+                    });
+                }
+            }
+            pushFrom(groups.pink,   perGroup);
+            pushFrom(groups.blue,   perGroup);
+            pushFrom(groups.purple, perGroup);
+            // se passou 90 por arredondamento, corta
+            blobs.length = totalBlobs;
+			// partículas finas para brilho
+			const particles = Array.from({length: 220}).map(() => {
+				const baseHue = palette[Math.floor(Math.random()*palette.length)];
+				return {
+					x: Math.random()*w, y: Math.random()*h,
+					r: 0.6 + Math.random()*1.6,
+					s: 0.25 + Math.random()*0.6,
+					h: baseHue + (Math.random()*10-5)
+				};
+			});
+			let t = 0;
+			// interação do mouse
+			const mouse = { x: 0, y: 0, active: true };
+			const toLocal = (e) => {
+				const rect = canvas.getBoundingClientRect();
+				mouse.x = (e.clientX - rect.left);
+				mouse.y = (e.clientY - rect.top);
+				mouse.active = true;
+			};
+			window.addEventListener('pointermove', toLocal);
+			function drawBlob(b){
+				const grad = ctx.createRadialGradient(b.x, b.y, b.r*0.12, b.x, b.y, b.r);
+				// Centro mais escuro e saturado para manter cor nas sobreposições
+				grad.addColorStop(0, `hsla(${b.h}, ${Math.min(b.s+8, 96)}%, ${Math.max(b.l-14, 46)}%, 0.82)`);
+				grad.addColorStop(0.6, `hsla(${b.h+6}, ${Math.max(b.s-6, 60)}%, ${Math.max(b.l-6, 52)}%, 0.58)`);
+				// Borda totalmente transparente NA MESMA COR (evita halo branco)
+				grad.addColorStop(1, `hsla(${b.h}, ${Math.max(b.s-12, 50)}%, ${b.l}%, 0)`);
+				ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill();
+			}
+			// ponte simple entre blobs próximos (ajuda parecer líquido)
+			function bridge(a, b){
+				const dx = b.x - a.x, dy = b.y - a.y;
+				const d = Math.hypot(dx, dy);
+				if (d > (a.r + b.r) * 0.55) return;
+				const mx = a.x + dx * 0.5, my = a.y + dy * 0.5;
+				const r = Math.min(a.r, b.r) * Math.max(0.22, 0.55 - d / (a.r + b.r));
+				const hue = (a.h + b.h) / 2;
+				const grad = ctx.createRadialGradient(mx, my, r*0.2, mx, my, r);
+				grad.addColorStop(0, `hsla(${hue}, 70%, 62%, 0.45)`);
+				// Borda transparente na cor média (sem fosco branco)
+				grad.addColorStop(1, `hsla(${hue}, 60%, 62%, 0)`);
+				ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(mx, my, r, 0, Math.PI*2); ctx.fill();
+			}
+			function loop(){
+				t += 0.016;
+				ctx.clearRect(0,0,w,h);
+				// mistura que preserva cor sem estourar para branco
+				ctx.globalCompositeOperation = 'soft-light';
+				blobs.forEach(b => {
+					// atração/repulsão suave ao mouse
+					const dx = mouse.x - b.x;
+					const dy = mouse.y - b.y;
+					const dist = Math.hypot(dx, dy) || 0.0001;
+					const influence = 340;
+                    if (dist < influence) {
+						const f = (1 - dist / influence);
+						// aceleração mais baixa para movimento mais devagar
+						const accel = 0.0006 * (f*f + 0.12);
+						b.vx += dx * accel;
+						b.vy += dy * accel;
+						// leve repulsão quando muito próximo do centro
+						if (dist < b.r * 0.6) {
+							b.vx -= dx * 0.0010 * (1 - dist / (b.r * 0.6));
+							b.vy -= dy * 0.0010 * (1 - dist / (b.r * 0.6));
+						}
+                        // mantém a cor próxima ao grupo de origem (evita tendenciar ao rosa)
+                        const drift = Math.sin(t*0.8 + dist*0.01) * 0.6;
+                        b.h = b.baseHue + drift;
+					}
+					b.x += b.vx; b.y += b.vy;
+					// bounce suave
+					if (b.x < -b.r) { b.x = -b.r; b.vx *= -1; }
+					if (b.y < -b.r) { b.y = -b.r; b.vy *= -1; }
+					if (b.x > w + b.r) { b.x = w + b.r; b.vx *= -1; }
+					if (b.y > h + b.r) { b.y = h + b.r; b.vy *= -1; }
+					b.r += Math.sin(t*0.6 + b.x*0.001 + b.y*0.0015) * 0.5;
+					drawBlob(b);
+				});
+				// pontes entre blobs próximos
+				for (let i = 0; i < blobs.length; i++) {
+					for (let j = i+1; j < blobs.length; j++) {
+						bridge(blobs[i], blobs[j]);
+					}
+				}
+				ctx.globalCompositeOperation = 'source-over';
+				// partículas brilhantes
+				particles.forEach(p => {
+					p.x += Math.sin((p.y+t*40)/60)*p.s*0.6 + (Math.sin(t*0.8)*0.3);
+					p.y -= p.s;
+					if (p.y < -5) { p.y = h+5; p.x = Math.random()*w; }
+					ctx.fillStyle = `hsla(${p.h + (Math.sin(t*2)*8)}, 85%, 85%, 0.8)`;
+					ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+				});
+				requestAnimationFrame(loop);
+			}
+			loop();
+		})();
+
+		// Webcam
+		const $video = document.getElementById('cam');
+		const $mirror = document.getElementById('mirror');
+		const $result = document.getElementById('result-img');
+		const $state = document.getElementById('state');
+		const $btnMic = document.getElementById('btn-mic');
+		const $btnDownload = document.getElementById('btn-download');
+		const $btnReset = document.getElementById('btn-reset');
+		let stream;
+		(async function initCam(){
+			try {
+				stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+				$video.srcObject = stream;
+			} catch (e) {
+				$state.textContent = 'Não foi possível acessar a câmera.';
+			}
+		})();
+
+		// Gravação de áudio
+		let mediaRecorder, audioChunks = [], isRecording = false;
+		async function startRecording(){
+			const audioStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+			mediaRecorder = new MediaRecorder(audioStream);
+			audioChunks = [];
+			mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+			mediaRecorder.start();
+			isRecording = true;
+			$btnMic.classList.add('recording');
+			$state.textContent = 'Gravando... toque novamente para parar.';
+		}
+		async function stopRecording(){
+			return new Promise(resolve => {
+				mediaRecorder.onstop = () => {
+					isRecording = false;
+					$btnMic.classList.remove('recording');
+					const blob = new Blob(audioChunks, { type: 'audio/webm' });
+					resolve(blob);
+				};
+				try { mediaRecorder.stop(); } catch {}
+			});
+		}
+
+		function getEnv(key){ const m = document.querySelector(`meta[name="${key}"]`); return (m && m.getAttribute('content')) || ''; }
+
+		// STT: tenta ElevenLabs; se indisponível, usa OpenAI Whisper
+		async function transcribe(blob){
+			const elevenKey = (getEnv('ELEVENLABS_API_KEY') || '').trim();
+			try {
+				if (elevenKey) {
+					// ElevenLabs STT (se disponível)
+					// Endpoint sujeito a mudanças; usando rota de transcrição aproximada
+					const form = new FormData();
+					const file = new File([blob], 'audio.webm', { type: 'audio/webm' });
+					form.append('file', file);
+					form.append('model', 'eleven_multilingual_v2');
+					const r = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+						method:'POST',
+						headers: { 'xi-api-key': elevenKey },
+						body: form
+					});
+					if (r.ok) {
+						const d = await r.json();
+						const txt = (d && (d.text || d.transcript || '')) || '';
+						if (txt.trim()) return txt.trim();
+					}
+				}
+			} catch (e) { console.warn('ElevenLabs STT falhou, usando OpenAI', e); }
+			// Fallback: OpenAI Whisper
+			const openaiKey = (getEnv('OPENAI_API_KEY') || '').trim();
+			if (!openaiKey) throw new Error('OPENAI_API_KEY ausente');
+			const form = new FormData();
+			const file = new File([blob], 'audio.webm', { type: 'audio/webm' });
+			form.append('file', file);
+			form.append('model', 'whisper-1');
+			form.append('language', 'pt');
+			const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+				method:'POST',
+				headers: { 'Authorization': 'Bearer ' + openaiKey },
+				body: form
+			});
+			if (!resp.ok) {
+				const err = await resp.text();
+				throw new Error('STT error: ' + err);
+			}
+			const data = await resp.json();
+			return (data && (data.text || data.transcription || '').trim()) || '';
+		}
+
+		function snapshot(){
+			const canvas = document.createElement('canvas');
+			const rect = $video.getBoundingClientRect();
+			const w = $video.videoWidth || Math.round(rect.width * window.devicePixelRatio);
+			const h = $video.videoHeight || Math.round(rect.height * window.devicePixelRatio);
+			canvas.width = w; canvas.height = h;
+			const ctx = canvas.getContext('2d');
+			// espelho (flip horizontal)
+			ctx.translate(w, 0); ctx.scale(-1, 1);
+			ctx.drawImage($video, 0, 0, w, h);
+			return canvas.toDataURL('image/png');
+		}
+
+		async function generateAgedImage({ photoDataUrl, transcript }){
+			const resp = await fetch('/api/age-image', {
+				method:'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ photoDataUrl, transcript })
+			});
+			if (!resp.ok) {
+				const err = await resp.text();
+				throw new Error('Falha ao gerar imagem: ' + err);
+			}
+			const { imageDataUrl } = await resp.json();
+			return imageDataUrl;
+		}
+
+		let lastImageDataUrl = '';
+		$btnMic.addEventListener('click', async () => {
+			try {
+				$btnMic.disabled = true;
+				if (!isRecording) {
+					await startRecording();
+				} else {
+					// parar, desfocar, fotografar, transcrever, gerar imagem
+					const audioBlob = await stopRecording();
+					$state.textContent = 'Processando sua fala e imagem...';
+					$mirror.classList.add('blur');
+					const photo = snapshot();
+					const transcript = await transcribe(audioBlob);
+					$state.textContent = 'Gerando sua versão mais velha...';
+					const aged = await generateAgedImage({ photoDataUrl: photo, transcript });
+					lastImageDataUrl = aged;
+					$result.src = aged;
+					$result.classList.remove('hidden');
+					$mirror.classList.remove('blur');
+					$btnDownload.classList.remove('hidden');
+					$btnReset.classList.remove('hidden');
+					$state.textContent = 'Pronto! Sua imagem apareceu no espelho.';
+				}
+			} catch (e) {
+				console.error(e);
+				$state.textContent = 'Ocorreu um erro. Tente novamente.';
+				$mirror.classList.remove('blur');
+			} finally {
+				$btnMic.disabled = false;
+			}
+		});
+
+		$btnDownload.addEventListener('click', () => {
+			try {
+				const a = document.createElement('a');
+				a.href = lastImageDataUrl;
+				a.download = 'espelho-magico.png';
+				a.click();
+			} catch {}
+		});
+		$btnReset.addEventListener('click', () => {
+			$result.classList.add('hidden');
+			lastImageDataUrl = '';
+			$btnDownload.classList.add('hidden');
+			$btnReset.classList.add('hidden');
+			$state.textContent = 'Toque para começar a gravar sua mensagem.';
+		});
+	</script>
+</body>
+</html>
+

@@ -2,19 +2,11 @@
   "name": "uma-jornada-no-nosso-tempo",
   "version": "1.0.0",
   "description": "Um jogo narrativo interativo onde suas escolhas importam",
-  "main": "main.js",
   "scripts": {
-    "start": "electron .",
-    "build": "electron-builder",
     "vercel-build": "node vercel-build.js"
   },
   "author": "",
   "license": "ISC",
-  "devDependencies": {
-    "electron": "^28.0.0",
-    "electron-builder": "^24.9.1"
-  },
-  "dependencies": {
-    "dotenv": "^17.2.2"
-  }
+  "devDependencies": {},
+  "dependencies": {}
 }

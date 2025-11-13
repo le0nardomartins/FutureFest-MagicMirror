@@ -11,7 +11,7 @@ Um jogo narrativo interativo onde suas escolhas de sobre seus cuidados, estilo d
 
 1. Clone o repositório:
 ```bash
-git clone [URL_DO_SEU_REPOSITÓRIO]
+git clone https://github.com/le0nardomartins/FutureFest-MagicMirror.git
 cd uma-jornada-no-nosso-tempo
 ```
 
@@ -22,7 +22,6 @@ npm install
 
 ## 🛠️ Tecnologias Utilizadas
 
-- [Electron](https://www.electronjs.org/)
 - HTML5
 - CSS3
 - JavaScript
