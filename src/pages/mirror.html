@@ -17,16 +17,17 @@
 		<canvas id="bg"></canvas>
 		<div class="portal" aria-hidden="true"></div>
 		<div class="center">
-			<div id="mirror" class="mirror">
+			<div id="mirror" class="mirror closed">
 				<div class="mirror-inner">
 					<video id="cam" autoplay playsinline muted></video>
 					<img id="result-img" class="hidden" alt="resultado"/>
 					<div id="mirror-overlay"></div>
 				</div>
 			</div>
-			<div class="state" id="state">Toque para começar a gravar sua mensagem.</div>
+			<div class="state" id="state">Toque em “Começar” para abrir o espelho.</div>
 			<div class="controls">
-				<button id="btn-mic" class="btn btn-primary" aria-label="Gravar áudio">
+				<button id="btn-start" class="btn btn-primary" aria-label="Começar">Começar</button>
+				<button id="btn-mic" class="btn hidden" aria-label="Gravar áudio">
 					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path d="M12 1a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
 						<path d="M19 10a7 7 0 0 1-14 0"></path>
@@ -34,7 +35,7 @@
 					</svg>
 				</button>
 				<button id="btn-download" class="btn hidden">Baixar imagem</button>
-				<button id="btn-reset" class="btn hidden">Refazer</button>
+				<button id="btn-home" class="btn hidden">Voltar ao início</button>
 			</div>
 		</div>
 	</div>
@@ -55,17 +56,23 @@
 			const canvas = document.getElementById('bg');
 			const ctx = canvas.getContext('2d');
 			let w, h, dpr;
+			// controle dinâmico de carga visual
+			let blobs = [], particles = [];
+			let numBlobs = 0, numParticles = 0;
+			let baselineTargets = { blobs: 90, particles: 220 };
+			let fpsAvg = 60, lastT = performance.now(), frameCount = 0;
+			const palette = [330, 340, 350, 210, 200, 220, 280, 290, 265];
+
 			const resize = () => {
 				dpr = window.devicePixelRatio || 1;
 				w = canvas.clientWidth; h = canvas.clientHeight;
 				canvas.width = Math.floor(w * dpr); canvas.height = Math.floor(h * dpr);
 				ctx.setTransform(dpr,0,0,dpr,0,0);
+				updateTargetsFromEnv();
 			};
 			window.addEventListener('resize', resize); resize();
-			// paleta alvo: rosa claro, azul bebê e roxo claro
-			const palette = [330, 340, 350, 210, 200, 220, 280, 290, 265];
-			// blobs coloridos ("massinha")
-			const blobs = Array.from({length: 90}).map(() => {
+			// criação de itens
+			function createBlob(){
 				const baseHue = palette[Math.floor(Math.random()*palette.length)];
 				return {
 					x: Math.random()*w, y: Math.random()*h,
@@ -73,12 +80,10 @@
 					h: baseHue + (Math.random()*8-4),
 					s: 78 + Math.random()*10,
 					l: 68 + Math.random()*10,
-					// velocidades iniciais mais lentas
 					vx: (Math.random()*0.4-0.2), vy: (Math.random()*0.4-0.2)
 				};
-			});
-			// partículas finas para brilho
-			const particles = Array.from({length: 220}).map(() => {
+			}
+			function createParticle(){
 				const baseHue = palette[Math.floor(Math.random()*palette.length)];
 				return {
 					x: Math.random()*w, y: Math.random()*h,
@@ -86,7 +91,57 @@
 					s: 0.25 + Math.random()*0.6,
 					h: baseHue + (Math.random()*10-5)
 				};
-			});
+			}
+			function ensureArraySize(arr, needed, createFn){
+				if (arr.length < needed) {
+					const toAdd = needed - arr.length;
+					for (let i=0;i<toAdd;i++) arr.push(createFn());
+				} else if (arr.length > needed) {
+					arr.length = needed;
+				}
+			}
+			function computeTargets(){
+				const minSide = Math.min(window.innerWidth || w, window.innerHeight || h);
+				const isVerySmall = minSide <= 380;
+				const isSmall = minSide <= 540;
+				const cores = navigator.hardwareConcurrency || 4;
+				const lowCore = cores <= 4;
+				const highDPR = (window.devicePixelRatio || dpr || 1) > 2;
+				const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+				// baseline
+				let blobsTarget = 90;
+				let particlesTarget = 220;
+				// multiplicadores
+				let m = 1.0;
+				if (isSmall) m *= 0.45;
+				if (isVerySmall) m *= 0.62; // adicional sobre o pequeno
+				if (lowCore) m *= 0.75;
+				if (highDPR) m *= 0.8;
+				if (prefersReducedMotion) m *= 0.25;
+				// clamp
+				m = Math.max(0.12, Math.min(1, m));
+				blobsTarget = Math.max(20, Math.round(blobsTarget * m));
+				particlesTarget = Math.max(40, Math.round(particlesTarget * m));
+				return { blobs: blobsTarget, particles: particlesTarget };
+			}
+			function applyTargets(t){
+				baselineTargets = { ...t };
+				// ajustar imediatamente arrays ao baseline e usar como base para ajustes dinâmicos
+				numBlobs = t.blobs;
+				numParticles = t.particles;
+				ensureArraySize(blobs, numBlobs, createBlob);
+				ensureArraySize(particles, numParticles, createParticle);
+			}
+			function updateTargetsFromEnv(){
+				const t = computeTargets();
+				applyTargets(t);
+			}
+			if (window.matchMedia) {
+				try {
+					const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+					mq.addEventListener ? mq.addEventListener('change', updateTargetsFromEnv) : mq.addListener(updateTargetsFromEnv);
+				} catch {}
+			}
 			let t = 0;
 			// interação do mouse
 			const mouse = { x: 0, y: 0, active: true };
@@ -98,13 +153,17 @@
 			};
 			window.addEventListener('pointermove', toLocal);
 			function drawBlob(b){
-				const grad = ctx.createRadialGradient(b.x, b.y, b.r*0.12, b.x, b.y, b.r);
+				// Garantir que o raio seja sempre positivo e válido
+				const radius = Math.max(1, b.r || 1);
+				const innerRadius = Math.max(0.1, radius * 0.12);
+				if (radius <= 0 || innerRadius <= 0) return; // Skip se inválido
+				const grad = ctx.createRadialGradient(b.x, b.y, innerRadius, b.x, b.y, radius);
 				// Centro mais escuro e saturado para manter cor nas sobreposições
 				grad.addColorStop(0, `hsla(${b.h}, ${Math.min(b.s+8, 96)}%, ${Math.max(b.l-14, 46)}%, 0.82)`);
 				grad.addColorStop(0.6, `hsla(${b.h+6}, ${Math.max(b.s-6, 60)}%, ${Math.max(b.l-6, 52)}%, 0.58)`);
 				// Borda totalmente transparente NA MESMA COR (evita halo branco)
 				grad.addColorStop(1, `hsla(${b.h}, ${Math.max(b.s-12, 50)}%, ${b.l}%, 0)`);
-				ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill();
+				ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(b.x,b.y,radius,0,Math.PI*2); ctx.fill();
 			}
 			// ponte simple entre blobs próximos (ajuda parecer líquido)
 			function bridge(a, b){
@@ -121,11 +180,20 @@
 				ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(mx, my, r, 0, Math.PI*2); ctx.fill();
 			}
 			function loop(){
+				// fps médio
+				const now = performance.now();
+				const dt = Math.max(1, now - lastT);
+				lastT = now;
+				const fpsInst = 1000 / dt;
+				fpsAvg = fpsAvg * 0.95 + fpsInst * 0.05;
+				frameCount++;
+
 				t += 0.016;
 				ctx.clearRect(0,0,w,h);
 				// mistura que preserva cor sem estourar para branco
 				ctx.globalCompositeOperation = 'soft-light';
-				blobs.forEach(b => {
+				for (let i = 0; i < numBlobs; i++) {
+					const b = blobs[i];
 					// atração/repulsão suave ao mouse
 					const dx = mouse.x - b.x;
 					const dy = mouse.y - b.y;
@@ -152,22 +220,41 @@
 					if (b.y > h + b.r) { b.y = h + b.r; b.vy *= -1; }
 					b.r += Math.sin(t*0.6 + b.x*0.001 + b.y*0.0015) * 0.5;
 					drawBlob(b);
-				});
+				}
 				// pontes entre blobs próximos
-				for (let i = 0; i < blobs.length; i++) {
-					for (let j = i+1; j < blobs.length; j++) {
+				for (let i = 0; i < numBlobs; i++) {
+					for (let j = i+1; j < numBlobs; j++) {
 						bridge(blobs[i], blobs[j]);
 					}
 				}
 				ctx.globalCompositeOperation = 'source-over';
 				// partículas brilhantes
-				particles.forEach(p => {
+				for (let i = 0; i < numParticles; i++) {
+					const p = particles[i];
 					p.x += Math.sin((p.y+t*40)/60)*p.s*0.6 + (Math.sin(t*0.8)*0.3);
 					p.y -= p.s;
 					if (p.y < -5) { p.y = h+5; p.x = Math.random()*w; }
 					ctx.fillStyle = `hsla(${p.h + (Math.sin(t*2)*8)}, 85%, 85%, 0.8)`;
 					ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
-				});
+				}
+				// ajuste dinâmico por FPS a cada ~60 frames
+				if (frameCount % 60 === 0) {
+					const target = baselineTargets;
+					const isSmallNow = Math.min(window.innerWidth || w, window.innerHeight || h) <= 540;
+					if (fpsAvg < 45) {
+						// reduzir 12-18%
+						numBlobs = Math.max(12, Math.round(numBlobs * 0.85));
+						numParticles = Math.max(24, Math.round(numParticles * 0.85));
+						ensureArraySize(blobs, numBlobs, createBlob);
+						ensureArraySize(particles, numParticles, createParticle);
+					} else if (fpsAvg > 58 && !isSmallNow) {
+						// recuperar gradualmente até o baseline
+						const nextBlobs = Math.min(target.blobs, Math.round(numBlobs * 1.1 + 1));
+						const nextParticles = Math.min(target.particles, Math.round(numParticles * 1.1 + 2));
+						if (nextBlobs !== numBlobs) { numBlobs = nextBlobs; ensureArraySize(blobs, numBlobs, createBlob); }
+						if (nextParticles !== numParticles) { numParticles = nextParticles; ensureArraySize(particles, numParticles, createParticle); }
+					}
+				}
 				requestAnimationFrame(loop);
 			}
 			loop();
@@ -178,18 +265,29 @@
 		const $mirror = document.getElementById('mirror');
 		const $result = document.getElementById('result-img');
 		const $state = document.getElementById('state');
+		const $btnStart = document.getElementById('btn-start');
 		const $btnMic = document.getElementById('btn-mic');
 		const $btnDownload = document.getElementById('btn-download');
-		const $btnReset = document.getElementById('btn-reset');
+		const $btnHome = document.getElementById('btn-home');
 		let stream;
-		(async function initCam(){
+
+		async function openCamera(){
 			try {
 				stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
 				$video.srcObject = stream;
+				return true;
 			} catch (e) {
 				$state.textContent = 'Não foi possível acessar a câmera.';
+				return false;
 			}
-		})();
+		}
+		function closeCamera(){
+			try {
+				if (stream) { stream.getTracks().forEach(t => t.stop()); }
+			} catch {}
+			stream = null;
+			try { $video.srcObject = null; } catch {}
+		}
 
 		// Gravação de áudio
 		let mediaRecorder, audioChunks = [], isRecording = false;
@@ -217,48 +315,44 @@
 
 		function getEnv(key){ const m = document.querySelector(`meta[name="${key}"]`); return (m && m.getAttribute('content')) || ''; }
 
-		// STT: tenta ElevenLabs; se indisponível, usa OpenAI Whisper
+		// STT: usa apenas OpenAI Whisper
 		async function transcribe(blob){
-			const elevenKey = (getEnv('ELEVENLABS_API_KEY') || '').trim();
-			try {
-				if (elevenKey) {
-					// ElevenLabs STT (se disponível)
-					// Endpoint sujeito a mudanças; usando rota de transcrição aproximada
-					const form = new FormData();
-					const file = new File([blob], 'audio.webm', { type: 'audio/webm' });
-					form.append('file', file);
-					form.append('model', 'eleven_multilingual_v2');
-					const r = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
-						method:'POST',
-						headers: { 'xi-api-key': elevenKey },
-						body: form
-					});
-					if (r.ok) {
-						const d = await r.json();
-						const txt = (d && (d.text || d.transcript || '')) || '';
-						if (txt.trim()) return txt.trim();
-					}
-				}
-			} catch (e) { console.warn('ElevenLabs STT falhou, usando OpenAI', e); }
-			// Fallback: OpenAI Whisper
+			console.log('🎤 Iniciando transcrição de áudio com OpenAI Whisper...');
 			const openaiKey = (getEnv('OPENAI_API_KEY') || '').trim();
 			if (!openaiKey) throw new Error('OPENAI_API_KEY ausente');
+			
+			console.log('📤 Preparando áudio para envio ao Whisper...');
 			const form = new FormData();
 			const file = new File([blob], 'audio.webm', { type: 'audio/webm' });
 			form.append('file', file);
 			form.append('model', 'whisper-1');
 			form.append('language', 'pt');
+			
+			console.log('🚀 Enviando para OpenAI Whisper API...');
+			const startTime = Date.now();
 			const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
 				method:'POST',
 				headers: { 'Authorization': 'Bearer ' + openaiKey },
 				body: form
 			});
+			const duration = Date.now() - startTime;
+			
 			if (!resp.ok) {
 				const err = await resp.text();
+				console.error('❌ Erro na transcrição Whisper:', err);
 				throw new Error('STT error: ' + err);
 			}
+			
+			console.log(`✅ Resposta recebida do Whisper (${duration}ms)`);
 			const data = await resp.json();
-			return (data && (data.text || data.transcription || '').trim()) || '';
+			const transcript = (data && (data.text || data.transcription || '').trim()) || '';
+			
+			console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+			console.log('✅ TRANSCRIÇÃO DA FALA DO USUÁRIO (Whisper):');
+			console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+			console.log('"', transcript, '"');
+			console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+			return transcript;
 		}
 
 		function snapshot(){
@@ -274,17 +368,92 @@
 			return canvas.toDataURL('image/png');
 		}
 
+		// Fluxo: Começar → abre "magicamente" e habilita microfone
+		$btnStart.addEventListener('click', async () => {
+			try {
+				$btnStart.disabled = true;
+				$state.textContent = 'Abrindo o espelho...';
+				// Garante que o vídeo esteja visível e a imagem resultante escondida
+				$result.classList.add('hidden');
+				$video.classList.remove('hidden');
+				$mirror.classList.remove('closed');
+				$mirror.classList.add('opening');
+				const ok = await openCamera();
+				// pequena duração para a animação de abertura
+				await new Promise(r => setTimeout(r, 600));
+				$mirror.classList.remove('opening');
+				if (ok) {
+					$btnMic.classList.remove('hidden');
+					$state.textContent = 'Toque no microfone e descreva seu estilo de vida.';
+					$btnStart.classList.add('hidden');
+				} else {
+					$mirror.classList.add('closed');
+				}
+			} finally {
+				$btnStart.disabled = false;
+			}
+		});
+
 		async function generateAgedImage({ photoDataUrl, transcript }){
+			console.log('🖼️ ===== ENVIANDO FOTO PARA IA ENVELHECER =====');
+			console.log('📸 Foto capturada (tamanho base64):', photoDataUrl.length, 'caracteres');
+			
+			// Mostra a transcrição recebida de forma destacada
+			console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+			console.log('💬 TRANSCRIÇÃO RECEBIDA (estilo de vida do usuário):');
+			console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+			console.log(transcript || '(nenhuma transcrição fornecida)');
+			console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+			
+			// PROMPT BASE que será enviado (será combinado com o estilo de vida no backend)
+			// O prompt será: prompt base + o que o usuário disse (limitado a 1000 caracteres)
+			const promptBaseText = 'Transform this photo to appear realistically older (80 years old) while fully preserving identity, facial features, skin tone, proportions, hairstyle, framing, pose, background, and lighting. Apply natural aging for 80 years: deeper wrinkles, age spots, mature skin texture, loss of firmness, gray/white hair, thinning hair, sagging skin. No filters, stylization, makeup, or graphic elements. Maintain realistic high-fidelity photography.';
+			const MAX_PROMPT_LENGTH = 1000;
+			const baseLength = promptBaseText.length;
+			const suffixLength = transcript ? ' Incorporate lifestyle: . Output realistic 80-year-old version, maintaining fidelity.'.length : ' Output realistic 80-year-old version, maintaining fidelity.'.length;
+			const availableForTranscript = MAX_PROMPT_LENGTH - baseLength - suffixLength;
+			
+			let finalTranscript = transcript || '';
+			if (transcript && transcript.length > availableForTranscript) {
+				finalTranscript = transcript.substring(0, availableForTranscript - 3) + '...';
+				console.log(`⚠️ Transcrição será truncada no backend para não exceder ${MAX_PROMPT_LENGTH} caracteres`);
+			}
+			
+			const promptBase = finalTranscript 
+				? `${promptBaseText} Incorporate lifestyle: ${finalTranscript}. Output realistic 80-year-old version, maintaining fidelity.`
+				: `${promptBaseText} Output realistic 80-year-old version, maintaining fidelity.`;
+			
+			console.log(`📏 Tamanho estimado do prompt: ${promptBase.length} caracteres (limite: ${MAX_PROMPT_LENGTH})`);
+			
+			console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+			console.log('📝 PROMPT COMPLETO QUE SERÁ ENVIADO PARA A IA:');
+			console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+			console.log('PROMPT BASE + O QUE O USUÁRIO DISSE:');
+			console.log(promptBase);
+			console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+			console.log('🚀 Enviando para /api/age-image → OpenAI /v1/images/edits...');
+			const requestStartTime = Date.now();
+			
 			const resp = await fetch('/api/age-image', {
 				method:'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ photoDataUrl, transcript })
 			});
+			const requestDuration = Date.now() - requestStartTime;
+			
+			console.log(`📥 Resposta recebida do backend (${requestDuration}ms)`);
+			console.log('📊 Status HTTP:', resp.status, resp.statusText);
+			
 			if (!resp.ok) {
 				const err = await resp.text();
+				console.error('❌ Erro ao gerar imagem:', err);
 				throw new Error('Falha ao gerar imagem: ' + err);
 			}
+			
+			console.log('✅ Resposta OK, processando JSON...');
 			const { imageDataUrl } = await resp.json();
+			console.log('✅ Imagem envelhecida recebida (tamanho base64):', imageDataUrl.length, 'caracteres');
+			console.log('🖼️ ===== PROCESSAMENTO CONCLUÍDO =====');
 			return imageDataUrl;
 		}
 
@@ -295,21 +464,36 @@
 				if (!isRecording) {
 					await startRecording();
 				} else {
-					// parar, desfocar, fotografar, transcrever, gerar imagem
+					// parar, desfocar, aguardar 2s com câmera ligada, fotografar, transcrever, gerar imagem
+					console.log('⏹️ Parando gravação de áudio...');
 					const audioBlob = await stopRecording();
+					console.log('📦 Áudio gravado (tamanho):', audioBlob.size, 'bytes');
 					$state.textContent = 'Processando sua fala e imagem...';
 					$mirror.classList.add('blur');
+					console.log('⏳ Aguardando 2 segundos antes de capturar foto...');
+					await new Promise(r => setTimeout(r, 2000));
+					console.log('📷 Capturando foto da câmera...');
 					const photo = snapshot();
+					console.log('✅ Foto capturada!');
+					console.log('🎤 Iniciando transcrição do áudio...');
 					const transcript = await transcribe(audioBlob);
 					$state.textContent = 'Gerando sua versão mais velha...';
+					console.log('🤖 Enviando foto e transcrição para IA envelhecer...');
 					const aged = await generateAgedImage({ photoDataUrl: photo, transcript });
 					lastImageDataUrl = aged;
+					// Esconde o vídeo e mostra a imagem resultante
+					console.log('🖼️ Exibindo imagem envelhecida no espelho...');
+					$video.classList.add('hidden');
 					$result.src = aged;
 					$result.classList.remove('hidden');
 					$mirror.classList.remove('blur');
 					$btnDownload.classList.remove('hidden');
-					$btnReset.classList.remove('hidden');
 					$state.textContent = 'Pronto! Sua imagem apareceu no espelho.';
+					console.log('✅ Processo completo finalizado!');
+					// Fecha câmera e troca microfone por "Voltar ao início"
+					closeCamera();
+					$btnMic.classList.add('hidden');
+					$btnHome.classList.remove('hidden');
 				}
 			} catch (e) {
 				console.error(e);
@@ -328,13 +512,208 @@
 				a.click();
 			} catch {}
 		});
-		$btnReset.addEventListener('click', () => {
+		$btnHome.addEventListener('click', () => {
+			// volta ao início: espelho fechado e somente "Começar"
+			closeCamera();
 			$result.classList.add('hidden');
+			$video.classList.remove('hidden'); // Restaura o vídeo para próxima vez
 			lastImageDataUrl = '';
 			$btnDownload.classList.add('hidden');
-			$btnReset.classList.add('hidden');
-			$state.textContent = 'Toque para começar a gravar sua mensagem.';
+			$btnHome.classList.add('hidden');
+			$btnMic.classList.add('hidden');
+			$btnStart.classList.remove('hidden');
+			$mirror.classList.add('closed');
+			$state.textContent = 'Toque em "Começar" para abrir o espelho.';
 		});
+
+		// Console de debug secreto: pressionar "G" 10 vezes seguidas
+		(function debugConsole(){
+			let gCount = 0;
+			let lastGTime = 0;
+			let debugPanel = null;
+			const G_TIMEOUT = 2000; // 2 segundos para resetar contador
+			
+			function createDebugPanel(){
+				if (debugPanel) return;
+				debugPanel = document.createElement('div');
+				debugPanel.id = 'debug-console';
+				debugPanel.style.cssText = `
+					position: fixed;
+					top: 20px;
+					right: 20px;
+					width: 400px;
+					height: 300px;
+					background: rgba(0, 0, 0, 0.85);
+					color: #0f0;
+					font-family: 'Courier New', monospace;
+					font-size: 12px;
+					padding: 12px;
+					border: 2px solid #0f0;
+					border-radius: 8px;
+					z-index: 10000;
+					overflow-y: auto;
+					cursor: move;
+					resize: both;
+					box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+				`;
+				debugPanel.innerHTML = '<div style="color:#0f0; font-weight:bold; margin-bottom:8px; border-bottom:1px solid #0f0; padding-bottom:4px;">DEBUG CONSOLE [Arraste para mover]</div><div id="debug-log"></div>';
+				document.body.appendChild(debugPanel);
+				
+				// Tornar arrastável
+				let isDragging = false;
+				let startX, startY, startLeft, startTop;
+				debugPanel.addEventListener('mousedown', (e) => {
+					if (e.target.id === 'debug-log' || e.target.closest('#debug-log')) return;
+					isDragging = true;
+					startX = e.clientX;
+					startY = e.clientY;
+					const rect = debugPanel.getBoundingClientRect();
+					startLeft = rect.left;
+					startTop = rect.top;
+					debugPanel.style.cursor = 'grabbing';
+				});
+				document.addEventListener('mousemove', (e) => {
+					if (!isDragging) return;
+					const dx = e.clientX - startX;
+					const dy = e.clientY - startY;
+					debugPanel.style.left = (startLeft + dx) + 'px';
+					debugPanel.style.top = (startTop + dy) + 'px';
+					debugPanel.style.right = 'auto';
+				});
+				document.addEventListener('mouseup', () => {
+					isDragging = false;
+					if (debugPanel) debugPanel.style.cursor = 'move';
+				});
+				
+				// Interceptar TODOS os métodos do console
+				const originalLog = console.log;
+				const originalError = console.error;
+				const originalWarn = console.warn;
+				const originalInfo = console.info;
+				const originalDebug = console.debug;
+				const originalTrace = console.trace;
+				const originalDir = console.dir;
+				const originalTable = console.table;
+				const logDiv = document.getElementById('debug-log');
+				
+				function addLog(type, args){
+					if (!logDiv) return;
+					const time = new Date().toLocaleTimeString();
+					const msg = Array.from(args).map(a => {
+						if (typeof a === 'object' && a !== null) {
+							try {
+								return JSON.stringify(a, null, 2);
+							} catch {
+								return String(a);
+							}
+						}
+						return String(a);
+					}).join(' ');
+					const color = type === 'error' ? '#f00' : type === 'warn' ? '#ff0' : type === 'info' ? '#0ff' : '#0f0';
+					const entry = document.createElement('div');
+					entry.style.cssText = `color:${color}; margin:2px 0; word-wrap:break-word; font-size:11px; line-height:1.4;`;
+					entry.innerHTML = `<span style="opacity:0.6;">[${time}]</span> <span style="color:${color};">${msg}</span>`;
+					logDiv.appendChild(entry);
+					logDiv.scrollTop = logDiv.scrollHeight;
+					// Limitar a 200 entradas
+					while (logDiv.children.length > 200) logDiv.removeChild(logDiv.firstChild);
+				}
+				
+				// Interceptar todos os métodos do console
+				console.log = function(...args){
+					originalLog.apply(console, args);
+					addLog('log', args);
+				};
+				console.error = function(...args){
+					originalError.apply(console, args);
+					addLog('error', args);
+				};
+				console.warn = function(...args){
+					originalWarn.apply(console, args);
+					addLog('warn', args);
+				};
+				console.info = function(...args){
+					originalInfo.apply(console, args);
+					addLog('info', args);
+				};
+				console.debug = function(...args){
+					originalDebug.apply(console, args);
+					addLog('debug', args);
+				};
+				console.trace = function(...args){
+					originalTrace.apply(console, args);
+					addLog('trace', args);
+				};
+				console.dir = function(...args){
+					originalDir.apply(console, args);
+					addLog('dir', args);
+				};
+				console.table = function(...args){
+					originalTable.apply(console, args);
+					addLog('table', args);
+				};
+				
+				// Interceptar erros globais e de rede
+				window.addEventListener('error', (e) => {
+					addLog('error', [`❌ Erro global: ${e.message}`, `Arquivo: ${e.filename}:${e.lineno}:${e.colno}`]);
+				});
+				
+				window.addEventListener('unhandledrejection', (e) => {
+					addLog('error', [`❌ Promise rejeitada: ${e.reason}`]);
+				});
+				
+				// Interceptar fetch para capturar erros de rede
+				const originalFetch = window.fetch;
+				window.fetch = async function(...args){
+					const url = args[0];
+					const startTime = Date.now();
+					try {
+						const response = await originalFetch.apply(this, args);
+						const duration = Date.now() - startTime;
+						if (!response.ok) {
+							addLog('warn', [`⚠️ Fetch ${response.status}: ${url} (${duration}ms)`]);
+						} else {
+							addLog('log', [`✅ Fetch ${response.status}: ${url} (${duration}ms)`]);
+						}
+						return response;
+					} catch (error) {
+						const duration = Date.now() - startTime;
+						addLog('error', [`❌ Fetch falhou: ${url} - ${error.message} (${duration}ms)`]);
+						throw error;
+					}
+				};
+				
+				console.log('🔧 Console de debug ativado!');
+				console.log('📡 Interceptação de fetch ativada para capturar erros de rede');
+			}
+			
+			function removeDebugPanel(){
+				if (debugPanel) {
+					debugPanel.remove();
+					debugPanel = null;
+				}
+			}
+			
+			window.addEventListener('keydown', (e) => {
+				if (e.key.toLowerCase() === 'g' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+					const now = Date.now();
+					if (now - lastGTime > G_TIMEOUT) {
+						gCount = 0;
+					}
+					lastGTime = now;
+					gCount++;
+					
+					if (gCount >= 10) {
+						gCount = 0;
+						if (debugPanel) {
+							removeDebugPanel();
+						} else {
+							createDebugPanel();
+						}
+					}
+				}
+			});
+		})();
 	</script>
 </body>
 </html>
