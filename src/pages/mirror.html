@@ -28,10 +28,16 @@
 			<div class="controls">
 				<button id="btn-start" class="btn btn-primary" aria-label="Começar">Começar</button>
 				<button id="btn-mic" class="btn hidden" aria-label="Gravar áudio">
-					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<!-- Ícone de microfone (estado normal) -->
+					<svg class="icon icon-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path d="M12 1a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
 						<path d="M19 10a7 7 0 0 1-14 0"></path>
 						<path d="M12 19v4"></path>
+					</svg>
+					<!-- Ícone de X (aparece enquanto estiver gravando) -->
+					<svg class="icon icon-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M6 6l12 12"></path>
+						<path d="M18 6L6 18"></path>
 					</svg>
 				</button>
 				<button id="btn-download" class="btn hidden">Baixar imagem</button>
@@ -95,9 +101,19 @@
 			function ensureArraySize(arr, needed, createFn){
 				if (arr.length < needed) {
 					const toAdd = needed - arr.length;
-					for (let i=0;i<toAdd;i++) arr.push(createFn());
+					for (let i=0;i<toAdd;i++) {
+						const item = createFn();
+						// inicia com alpha baixo para aparecer gradualmente
+						item.alpha = 0;
+						arr.push(item);
+					}
 				} else if (arr.length > needed) {
-					arr.length = needed;
+					// NÃO corta o array abruptamente; marcamos alguns itens para "sumir" suavemente
+					for (let i = arr.length - 1; i >= needed; i--) {
+						if (!arr[i].dying) {
+							arr[i].dying = true;
+						}
+					}
 				}
 			}
 			function computeTargets(){
@@ -153,14 +169,25 @@
 			};
 			window.addEventListener('pointermove', toLocal);
 			function drawBlob(b){
+				// alpha suave: cresce quando ativo, diminui quando marcado como "dying"
+				if (typeof b.alpha !== 'number') b.alpha = 1;
+				const alphaSpeed = 0.02;
+				if (b.dying) {
+					b.alpha -= alphaSpeed;
+				} else if (b.alpha < 1) {
+					b.alpha += alphaSpeed;
+				}
+				b.alpha = Math.max(0, Math.min(1, b.alpha));
+				if (b.alpha <= 0) return; // não desenha se invisível
+
 				// Garantir que o raio seja sempre positivo e válido
 				const radius = Math.max(1, b.r || 1);
 				const innerRadius = Math.max(0.1, radius * 0.12);
 				if (radius <= 0 || innerRadius <= 0) return; // Skip se inválido
 				const grad = ctx.createRadialGradient(b.x, b.y, innerRadius, b.x, b.y, radius);
 				// Centro mais escuro e saturado para manter cor nas sobreposições
-				grad.addColorStop(0, `hsla(${b.h}, ${Math.min(b.s+8, 96)}%, ${Math.max(b.l-14, 46)}%, 0.82)`);
-				grad.addColorStop(0.6, `hsla(${b.h+6}, ${Math.max(b.s-6, 60)}%, ${Math.max(b.l-6, 52)}%, 0.58)`);
+				grad.addColorStop(0, `hsla(${b.h}, ${Math.min(b.s+8, 96)}%, ${Math.max(b.l-14, 46)}%, ${0.82 * b.alpha})`);
+				grad.addColorStop(0.6, `hsla(${b.h+6}, ${Math.max(b.s-6, 60)}%, ${Math.max(b.l-6, 52)}%, ${0.58 * b.alpha})`);
 				// Borda totalmente transparente NA MESMA COR (evita halo branco)
 				grad.addColorStop(1, `hsla(${b.h}, ${Math.max(b.s-12, 50)}%, ${b.l}%, 0)`);
 				ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(b.x,b.y,radius,0,Math.PI*2); ctx.fill();
@@ -169,11 +196,18 @@
 			function bridge(a, b){
 				const dx = b.x - a.x, dy = b.y - a.y;
 				const d = Math.hypot(dx, dy);
-				if (d > (a.r + b.r) * 0.55) return;
+				const ra = Math.abs(a.r || 0);
+				const rb = Math.abs(b.r || 0);
+				const sumR = Math.max(1, ra + rb);
+				if (d > (ra + rb) * 0.55) return;
 				const mx = a.x + dx * 0.5, my = a.y + dy * 0.5;
-				const r = Math.min(a.r, b.r) * Math.max(0.22, 0.55 - d / (a.r + b.r));
+				// Raio da "ponte" entre blobs, sempre positivo e com limite mínimo
+				let r = Math.min(ra, rb) * Math.max(0.22, 0.55 - d / sumR);
+				if (!Number.isFinite(r) || r <= 0) return;
+				r = Math.max(1, r);
 				const hue = (a.h + b.h) / 2;
-				const grad = ctx.createRadialGradient(mx, my, r*0.2, mx, my, r);
+				const innerR = Math.max(0.1, r * 0.2);
+				const grad = ctx.createRadialGradient(mx, my, innerR, mx, my, r);
 				grad.addColorStop(0, `hsla(${hue}, 70%, 62%, 0.45)`);
 				// Borda transparente na cor média (sem fosco branco)
 				grad.addColorStop(1, `hsla(${hue}, 60%, 62%, 0)`);
@@ -237,6 +271,13 @@
 					ctx.fillStyle = `hsla(${p.h + (Math.sin(t*2)*8)}, 85%, 85%, 0.8)`;
 					ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
 				}
+				// limpar blobs que terminaram o fade-out
+				for (let i = blobs.length - 1; i >= 0; i--) {
+					if (blobs[i].dying && (blobs[i].alpha !== undefined && blobs[i].alpha <= 0)) {
+						blobs.splice(i, 1);
+					}
+				}
+
 				// ajuste dinâmico por FPS a cada ~60 frames
 				if (frameCount % 60 === 0) {
 					const target = baselineTargets;
@@ -395,8 +436,8 @@
 		});
 
 		async function generateAgedImage({ photoDataUrl, transcript }){
-			console.log('🖼️ ===== ENVIANDO FOTO PARA IA ENVELHECER =====');
-			console.log('📸 Foto capturada (tamanho base64):', photoDataUrl.length, 'caracteres');
+			console.log('🖼️ ===== ENVIANDO FOTO PARA gpt-image-1 (IMAGE-TO-IMAGE) ENVELHECER =====');
+			console.log('📸 Foto capturada da CÂMERA (snapshot, base64):', photoDataUrl.length, 'caracteres');
 			
 			// Mostra a transcrição recebida de forma destacada
 			console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -405,33 +446,22 @@
 			console.log(transcript || '(nenhuma transcrição fornecida)');
 			console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 			
-			// PROMPT BASE que será enviado (será combinado com o estilo de vida no backend)
-			// O prompt será: prompt base + o que o usuário disse (limitado a 1000 caracteres)
-			const promptBaseText = 'Transform this photo to appear realistically older (80 years old) while fully preserving identity, facial features, skin tone, proportions, hairstyle, framing, pose, background, and lighting. Apply natural aging for 80 years: deeper wrinkles, age spots, mature skin texture, loss of firmness, gray/white hair, thinning hair, sagging skin. No filters, stylization, makeup, or graphic elements. Maintain realistic high-fidelity photography.';
-			const MAX_PROMPT_LENGTH = 1000;
-			const baseLength = promptBaseText.length;
-			const suffixLength = transcript ? ' Incorporate lifestyle: . Output realistic 80-year-old version, maintaining fidelity.'.length : ' Output realistic 80-year-old version, maintaining fidelity.'.length;
-			const availableForTranscript = MAX_PROMPT_LENGTH - baseLength - suffixLength;
-			
-			let finalTranscript = transcript || '';
-			if (transcript && transcript.length > availableForTranscript) {
-				finalTranscript = transcript.substring(0, availableForTranscript - 3) + '...';
-				console.log(`⚠️ Transcrição será truncada no backend para não exceder ${MAX_PROMPT_LENGTH} caracteres`);
+			// PROMPT BASE usado no backend:
+			// "age this person by 30 years realistically while maintaining identity"
+			// acrescido de uma explicação sobre a influência do estilo de vida da pessoa.
+			const basePrompt = 'age this person by 30 years realistically while maintaining identity';
+			let lifestylePart = '';
+			if (transcript) {
+				lifestylePart = ` (backend: also considers the following lifestyle description in Portuguese to influence the aging signs: "${transcript}")`;
 			}
-			
-			const promptBase = finalTranscript 
-				? `${promptBaseText} Incorporate lifestyle: ${finalTranscript}. Output realistic 80-year-old version, maintaining fidelity.`
-				: `${promptBaseText} Output realistic 80-year-old version, maintaining fidelity.`;
-			
-			console.log(`📏 Tamanho estimado do prompt: ${promptBase.length} caracteres (limite: ${MAX_PROMPT_LENGTH})`);
+			const promptPreview = basePrompt + lifestylePart;
 			
 			console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-			console.log('📝 PROMPT COMPLETO QUE SERÁ ENVIADO PARA A IA:');
+			console.log('📝 PREVIEW DO PROMPT (BASE + ESTILO DE VIDA) USADO NO BACKEND:');
 			console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-			console.log('PROMPT BASE + O QUE O USUÁRIO DISSE:');
-			console.log(promptBase);
+			console.log(promptPreview);
 			console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-			console.log('🚀 Enviando para /api/age-image → OpenAI /v1/images/edits...');
+			console.log('🚀 Enviando imagem + hábitos para backend /api/age-image (que chama gpt-image-1 em modo image-to-image)...');
 			const requestStartTime = Date.now();
 			
 			const resp = await fetch('/api/age-image', {
@@ -441,19 +471,39 @@
 			});
 			const requestDuration = Date.now() - requestStartTime;
 			
-			console.log(`📥 Resposta recebida do backend (${requestDuration}ms)`);
-			console.log('📊 Status HTTP:', resp.status, resp.statusText);
+			console.log(`📥 Resposta recebida do backend (${requestDuration}ms) [gpt-image-1 image-to-image]`);
+			console.log('📊 Status HTTP backend /api/age-image:', resp.status, resp.statusText);
 			
 			if (!resp.ok) {
-				const err = await resp.text();
-				console.error('❌ Erro ao gerar imagem:', err);
-				throw new Error('Falha ao gerar imagem: ' + err);
+				const errText = await resp.text();
+				let errData;
+				try {
+					errData = JSON.parse(errText);
+				} catch {
+					errData = { error: errText };
+				}
+				
+				console.error('❌ Erro ao gerar imagem:', errData);
+				
+				// Mensagem mais amigável baseada no tipo de erro
+				let userMessage = 'Não foi possível gerar a imagem. ';
+				if (resp.status === 500 || resp.status === 503) {
+					userMessage = 'Erro temporário do servidor da IA. Por favor, tente novamente em alguns instantes.';
+				} else if (resp.status === 408 || requestDuration > 60000) {
+					userMessage = 'A requisição demorou muito. Por favor, tente novamente.';
+				} else if (errData.userMessage) {
+					userMessage = errData.userMessage;
+				} else {
+					userMessage += 'Por favor, tente novamente.';
+				}
+				
+				throw new Error(userMessage);
 			}
 			
-			console.log('✅ Resposta OK, processando JSON...');
+			console.log('✅ Resposta OK do backend, lendo JSON com imagem envelhecida da IA...');
 			const { imageDataUrl } = await resp.json();
-			console.log('✅ Imagem envelhecida recebida (tamanho base64):', imageDataUrl.length, 'caracteres');
-			console.log('🖼️ ===== PROCESSAMENTO CONCLUÍDO =====');
+			console.log('✅ IMAGEM GERADA PELA IA (gpt-image-1) RECEBIDA (base64):', imageDataUrl.length, 'caracteres');
+			console.log('🖼️ ===== PIPELINE gpt-image-1 (IMAGE-TO-IMAGE) CONCLUÍDO - PRONTO PARA EXIBIR NO ESPELHO =====');
 			return imageDataUrl;
 		}
 
@@ -478,11 +528,12 @@
 					console.log('🎤 Iniciando transcrição do áudio...');
 					const transcript = await transcribe(audioBlob);
 					$state.textContent = 'Gerando sua versão mais velha...';
-					console.log('🤖 Enviando foto e transcrição para IA envelhecer...');
+					console.log('🤖 Enviando foto e transcrição para IA (DALL·E) envelhecer...');
 					const aged = await generateAgedImage({ photoDataUrl: photo, transcript });
 					lastImageDataUrl = aged;
 					// Esconde o vídeo e mostra a imagem resultante
-					console.log('🖼️ Exibindo imagem envelhecida no espelho...');
+					console.log('🖼️ Aplicando APENAS a imagem retornada pela IA no espelho (NÃO é a foto original)...');
+					console.log('🔁 A imagem da IA será exibida espelhada horizontalmente (style: transform: scaleX(-1)).');
 					$video.classList.add('hidden');
 					$result.src = aged;
 					$result.classList.remove('hidden');

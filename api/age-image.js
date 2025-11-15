@@ -15,144 +15,159 @@ export default async function handler(req, res) {
     }
     const lifestyle = String(transcript || '').trim();
 
-    // Prompt base otimizado e conciso para envelhecer até aproximadamente 80 anos (limitado a 1000 chars)
-    const promptBase = 'Transform this photo to appear realistically older (80 years old) while fully preserving identity, facial features, skin tone, proportions, hairstyle, framing, pose, background, and lighting. Apply natural aging for 80 years: deeper wrinkles, age spots, mature skin texture, loss of firmness, gray/white hair, thinning hair, sagging skin. No filters, stylization, makeup, or graphic elements. Maintain realistic high-fidelity photography.';
-    
-    // Limita a transcrição do usuário para não exceder 1000 caracteres no total
-    const MAX_PROMPT_LENGTH = 1000;
-    const baseLength = promptBase.length;
-    const suffixLength = lifestyle ? ' Incorporate lifestyle: . Output realistic 80-year-old version, maintaining fidelity.'.length : ' Output realistic 80-year-old version, maintaining fidelity.'.length;
-    const availableForLifestyle = MAX_PROMPT_LENGTH - baseLength - suffixLength;
-    
-    let finalLifestyle = '';
-    if (lifestyle) {
-      if (lifestyle.length > availableForLifestyle) {
-        finalLifestyle = lifestyle.substring(0, availableForLifestyle - 3) + '...';
-        console.log(`⚠️ Transcrição do usuário truncada de ${lifestyle.length} para ${finalLifestyle.length} caracteres para não exceder limite de 1000 caracteres`);
-      } else {
-        finalLifestyle = lifestyle;
-      }
-    }
-    
-    // Combina o prompt base com o estilo de vida do usuário se fornecido
-    const prompt = finalLifestyle 
-      ? `${promptBase} Incorporate lifestyle: ${finalLifestyle}. Output realistic 80-year-old version, maintaining fidelity.`
-      : `${promptBase} Output realistic 80-year-old version, maintaining fidelity.`;
-    
-    // Validação final - garante que nunca exceda 1000 caracteres
-    let finalPrompt = prompt;
-    if (prompt.length > MAX_PROMPT_LENGTH) {
-      console.warn(`⚠️ Prompt ainda excede ${MAX_PROMPT_LENGTH} caracteres (${prompt.length}). Truncando...`);
-      finalPrompt = prompt.substring(0, MAX_PROMPT_LENGTH - 3) + '...';
-    }
-    
-    console.log(`📏 Tamanho do prompt final: ${finalPrompt.length} caracteres (limite: ${MAX_PROMPT_LENGTH})`);
-
-    // Converte o dataURL para buffer
+    // Converte o dataURL para buffer (imagem original) – idêntico ao "open('foto_original.png', 'rb')"
     const base64 = photoDataUrl.split(',')[1];
     const imgBuf = Buffer.from(base64, 'base64');
 
-    // Log do prompt (será visível no console do servidor)
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🤖 PROCESSAMENTO DE IMAGEM PELA IA INICIADO');
+    console.log('🪞 PIPELINE DE ENVELHECIMENTO (gpt-image-1 IMAGE-TO-IMAGE) INICIADO');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('📸 Tamanho da imagem recebida:', imgBuf.length, 'bytes');
-    console.log('💬 Estilo de vida do usuário:', lifestyle || '(nenhum)');
+    console.log('📸 Tamanho da imagem ORIGINAL recebida (bytes):', imgBuf.length);
+    console.log('💬 Hábitos / estilo de vida informados:', lifestyle || '(nenhum)');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('📝 PROMPT COMPLETO ENVIADO PARA OPENAI:');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(finalPrompt);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🌐 Endpoint: https://api.openai.com/v1/images/edits');
-    console.log('📤 Preparando requisição multipart/form-data...');
 
-    // Envia para OpenAI Images Edits
-    // Nota: A API de edição não suporta response_format, então recebemos URL e convertemos para base64
-    // Criando multipart/form-data manualmente para compatibilidade
+    // Prompt base EXATAMENTE como solicitado:
+    // "age this person by 30 years realistically while maintaining identity"
+    // acrescido de uma explicação sobre a influência do estilo de vida da pessoa.
+    const BASE_PROMPT = 'age this person by 30 years realistically while maintaining identity';
+
+    let lifestylePart = '';
+    if (lifestyle) {
+      // Limita o texto de estilo de vida para não explodir o prompt
+      const MAX_LIFESTYLE_CHARS = 600;
+      let lifestyleTrimmed = lifestyle.trim();
+      if (lifestyleTrimmed.length > MAX_LIFESTYLE_CHARS) {
+        lifestyleTrimmed = lifestyleTrimmed.substring(0, MAX_LIFESTYLE_CHARS) + '...';
+      }
+
+      lifestylePart =
+        `. Take into account the person\'s lifestyle described in Portuguese here: "` +
+        lifestyleTrimmed +
+        '". Reflect this lifestyle realistically in the visible signs of aging, especially on skin quality, wrinkles, facial volume, expression lines and overall health.';
+    }
+
+    const finalPrompt = BASE_PROMPT + lifestylePart;
+
+    console.log('📝 PROMPT FINAL ENVIADO PARA gpt-image-1:');
+    console.log(finalPrompt);
+
+    // Monta multipart/form-data: model + image + prompt
     const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
     const formParts = [];
-    
-    // Adiciona campo 'image'
+
+    // Campo 'model'
+    formParts.push(`--${boundary}\r\n`);
+    formParts.push(`Content-Disposition: form-data; name="model"\r\n\r\n`);
+    formParts.push(`gpt-image-1\r\n`);
+
+    // Campo 'image' (equivalente ao open("foto_original.png", "rb"))
     formParts.push(`--${boundary}\r\n`);
     formParts.push(`Content-Disposition: form-data; name="image"; filename="photo.png"\r\n`);
     formParts.push(`Content-Type: image/png\r\n\r\n`);
     formParts.push(imgBuf);
-    formParts.push(`\r\n--${boundary}\r\n`);
-    
-    // Adiciona campo 'prompt' (usando finalPrompt que garante limite de 1000 chars)
+    formParts.push(`\r\n`);
+
+    // Campo 'prompt'
+    formParts.push(`--${boundary}\r\n`);
     formParts.push(`Content-Disposition: form-data; name="prompt"\r\n\r\n`);
-    formParts.push(finalPrompt);
-    formParts.push(`\r\n--${boundary}--\r\n`);
-    
-    // Constrói o body
-    const bodyParts = [];
+    formParts.push(finalPrompt + '\r\n');
+
+    // Fecha o formulário
+    formParts.push(`--${boundary}--\r\n`);
+
+    const bodyBuffers = [];
     for (const part of formParts) {
       if (Buffer.isBuffer(part)) {
-        bodyParts.push(part);
+        bodyBuffers.push(part);
       } else {
-        bodyParts.push(Buffer.from(part, 'utf8'));
+        bodyBuffers.push(Buffer.from(part, 'utf8'));
       }
     }
-    const body = Buffer.concat(bodyParts);
-    console.log('✅ Body multipart construído, tamanho:', body.length, 'bytes');
-    console.log('🚀 Enviando requisição para OpenAI Images Edits API...');
-    const apiStartTime = Date.now();
+    const body = Buffer.concat(bodyBuffers);
 
-    const resp = await fetch('https://api.openai.com/v1/images/edits', {
+    console.log('🎨 Chamando OpenAI Images API (images/edits, modelo gpt-image-1) para gerar a imagem envelhecida...');
+
+    const imagesResp = await fetch('https://api.openai.com/v1/images/edits', {
       method: 'POST',
-      headers: { 
+      headers: {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': `multipart/form-data; boundary=${boundary}`
       },
-      body: body
+      body
     });
-    const apiDuration = Date.now() - apiStartTime;
-    
-    console.log(`📥 Resposta recebida da OpenAI (${apiDuration}ms)`);
-    console.log('📊 Status HTTP:', resp.status, resp.statusText);
-    
-    if (!resp.ok) {
-      const err = await resp.text();
-      console.error('❌ Erro da API OpenAI:', err);
-      res.status(resp.status).json({ error: err || 'openai error' }); return;
+
+    console.log('📥 Resposta recebida da Images API (edits/gpt-image-1):', imagesResp.status, imagesResp.statusText);
+
+    if (!imagesResp.ok) {
+      const err = await imagesResp.text();
+      console.error('❌ Erro da Images API (gpt-image-1 /edits):', err);
+
+      let userMessage = 'Não foi possível gerar a imagem envelhecida. ';
+      if (imagesResp.status === 500 || imagesResp.status === 503) {
+        userMessage += 'Erro temporário do servidor da IA. Tente novamente em alguns instantes.';
+      } else if (imagesResp.status === 408) {
+        userMessage += 'A requisição demorou muito. Tente novamente.';
+      } else {
+        userMessage += 'Por favor, tente novamente.';
+      }
+
+      res.status(imagesResp.status || 500).json({
+        error: err,
+        userMessage
+      });
+      return;
     }
-    
-    console.log('✅ Resposta OK da OpenAI, processando JSON...');
-    const data = await resp.json();
-    console.log('📦 Dados recebidos:', JSON.stringify(data).substring(0, 200) + '...');
-    
-    const imageUrl = data && data.data && data.data[0] && data.data[0].url;
-    if (!imageUrl) { 
-      console.error('❌ URL da imagem não encontrada na resposta');
-      res.status(500).json({ error: 'no image URL in response' }); return; 
+
+    const imagesData = await imagesResp.json();
+    console.log('📦 Resposta bruta da Images API (trecho):', JSON.stringify(imagesData).substring(0, 400) + '...');
+
+    // Alguns ambientes retornam diretamente b64_json, outros apenas URL.
+    let imageDataUrl = '';
+
+    if (imagesData && imagesData.data && imagesData.data[0]) {
+      const item = imagesData.data[0];
+
+      if (item.b64_json) {
+        console.log('🧬 Encontrado campo b64_json na resposta da Images API. Usando base64 direto.');
+        imageDataUrl = `data:image/png;base64,${item.b64_json}`;
+      } else if (item.url) {
+        const imageUrl = item.url;
+        console.log('🖼️ URL da imagem envelhecida (gpt-image-1):', imageUrl);
+        console.log('📥 Fazendo download da imagem gerada pela IA...');
+
+        const downloadStartTime = Date.now();
+        const imgResp = await fetch(imageUrl);
+        if (!imgResp.ok) {
+          console.error('❌ Erro ao fazer download da imagem envelhecida:', imgResp.status, imgResp.statusText);
+          res.status(500).json({ error: 'failed to download generated image' });
+          return;
+        }
+
+        const imgBuffer = await imgResp.arrayBuffer();
+        const downloadDuration = Date.now() - downloadStartTime;
+        console.log(`✅ Imagem da IA baixada (${downloadDuration}ms), tamanho:`, imgBuffer.byteLength, 'bytes');
+
+        imageDataUrl = `data:image/png;base64,${Buffer.from(imgBuffer).toString('base64')}`;
+      }
     }
-    
-    console.log('🖼️ URL da imagem gerada:', imageUrl);
-    console.log('📥 Fazendo download da imagem gerada...');
-    const downloadStartTime = Date.now();
-    
-    // Faz download da imagem e converte para base64
-    const imgResp = await fetch(imageUrl);
-    if (!imgResp.ok) { 
-      console.error('❌ Erro ao fazer download da imagem:', imgResp.status);
-      res.status(500).json({ error: 'failed to download image' }); return; 
+
+    if (!imageDataUrl) {
+      console.error('❌ Nenhum dado de imagem (url ou b64_json) encontrado na resposta da Images API');
+      if (imagesData && imagesData.error) {
+        console.error('Detalhes do erro da Images API:', imagesData.error);
+      }
+      res.status(500).json({ error: 'no image data in Images API response' });
+      return;
     }
-    
-    const imgBuffer = await imgResp.arrayBuffer();
-    const downloadDuration = Date.now() - downloadStartTime;
-    console.log(`✅ Imagem baixada (${downloadDuration}ms), tamanho:`, imgBuffer.byteLength, 'bytes');
-    
-    console.log('🔄 Convertendo imagem para base64...');
-    const imgBase64 = Buffer.from(imgBuffer).toString('base64');
-    const imageDataUrl = `data:image/png;base64,${imgBase64}`;
-    console.log('✅ Imagem convertida para base64, tamanho final:', imageDataUrl.length, 'caracteres');
+
+    console.log('✅ Imagem envelhecida gerada pela IA (gpt-image-1 /edits).');
+    console.log('✅ Tamanho do data URL final:', imageDataUrl.length, 'caracteres');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('✅ PROCESSAMENTO CONCLUÍDO - Retornando imagem ao cliente');
+    console.log('✅ PIPELINE COMPLETO - Retornando imagem envelhecida ao cliente');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    
+
     res.status(200).json({ imageDataUrl });
   } catch (e) {
     res.status(500).json({ error: e && (e.message || String(e)) });
   }
 }
-
