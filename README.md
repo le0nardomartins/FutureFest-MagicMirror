@@ -12,7 +12,7 @@ Um jogo narrativo interativo onde suas escolhas de sobre seus cuidados, estilo d
 1. Clone o repositório:
 ```bash
 git clone https://github.com/le0nardomartins/FutureFest-MagicMirror.git
-cd uma-jornada-no-nosso-tempo
+cd FutureFest-MagicMirror
 ```
 
 2. Instale as dependências:
